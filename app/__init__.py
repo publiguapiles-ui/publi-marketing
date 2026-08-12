@@ -49,6 +49,13 @@ def create_app(nombre_config=None):
 
             upgrade()
 
+            # Idempotente: crea los 11 presets de sistema (Paso 10) si
+            # todavia no existen. Va aqui (no en la migracion) porque
+            # depende de la sesion normal de SQLAlchemy, no de Alembic.
+            from app.services.presets import sembrar_presets_sistema
+
+            sembrar_presets_sistema()
+
     registrar_manejadores_error(app)
     registrar_blueprints(app)
 

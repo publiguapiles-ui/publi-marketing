@@ -44,6 +44,15 @@ from app.services.storage import (
 )
 from app.services.derivados import crear_formato, crear_mejora_automatica, mejor_base_disponible, obtener_derivado, obtener_derivados_fotografia
 from app.services.procesamiento import cargar_imagen, detectar_rostros
+from app.services.presets import obtener_preset, obtener_preset_automatico, obtener_presets_disponibles
+from app.services.sesiones import (
+    analizar_sesion,
+    cancelar_sesion,
+    crear_sesion,
+    obtener_items_sesion,
+    obtener_sesion,
+    procesar_siguiente_item,
+)
 
 fotografia_bp = Blueprint("fotografia", __name__, url_prefix="/photo-studio")
 
@@ -123,6 +132,8 @@ def proyecto_detalle(proyecto_id):
     fotos_con_url = [(f, url_firmada(BUCKET_FOTOGRAFIAS, f.ruta_storage)) for f in fotos]
     logos = obtener_logos_empresa(empresa.id)
     logo_principal = obtener_logo_principal(empresa.id)
+    presets = obtener_presets_disponibles(empresa.id)
+    preset_automatico = obtener_preset_automatico()
     return render_template(
         "photo_studio/proyecto_detalle.html",
         empresa_activa=empresa,
@@ -133,6 +144,8 @@ def proyecto_detalle(proyecto_id):
         posiciones=POSICIONES_LOGO,
         posicion_predeterminada=POSICION_LOGO_PREDETERMINADA,
         formatos=TIPOS_FORMATO,
+        presets=presets,
+        preset_automatico=preset_automatico,
     )
 
 
@@ -525,6 +538,191 @@ def foto_descargar(fotografia_id):
     if url is None:
         abort(502)
     return redirect(url)
+
+
+def _sesion_de_empresa_activa(sesion_id):
+    """Mismo patron que _proyecto_de_empresa_activa /
+    _fotografia_de_empresa_activa: abort(404) si la sesion no
+    pertenece a la empresa activa, sin importar lo que diga la URL.
+    """
+    empresa, rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+    sesion = obtener_sesion(empresa.id, sesion_id)
+    if sesion is None:
+        abort(404)
+    return empresa, rol, sesion
+
+
+@fotografia_bp.post("/proyectos/<int:proyecto_id>/sesiones")
+@login_required
+def sesion_nueva(proyecto_id):
+    """Crea una sesion de procesamiento masivo (Paso 10) a partir de
+    fotografias YA existentes en este proyecto -- reutiliza la galeria
+    y el uploader existentes, no crea una segunda forma de importar.
+    """
+    empresa, _rol, proyecto = _proyecto_de_empresa_activa(proyecto_id)
+    usuario = obtener_usuario_actual()
+
+    if not storage_configurado():
+        return jsonify({"ok": False, "error": "El almacenamiento no está disponible en este momento."}), 503
+
+    datos = request.get_json(silent=True) or {}
+
+    fotografia_ids_enviados = datos.get("fotografia_ids") or []
+    try:
+        fotografia_ids = [int(i) for i in fotografia_ids_enviados]
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Selección de fotografías inválida."}), 400
+    if not fotografia_ids:
+        return jsonify({"ok": False, "error": "Selecciona al menos una fotografía."}), 400
+
+    # Nunca se confia en que las fotos pedidas sean de esta empresa
+    # solo porque el frontend las mando -- se revalida cada una.
+    for fotografia_id in fotografia_ids:
+        foto = obtener_fotografia(empresa.id, fotografia_id)
+        if foto is None or not foto.activo or foto.proyecto_id != proyecto.id:
+            return jsonify({"ok": False, "error": "Una de las fotografías seleccionadas no es válida."}), 400
+
+    preset_id = datos.get("preset_id")
+    try:
+        preset_id = int(preset_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Selecciona un preset."}), 400
+    preset = obtener_preset(empresa.id, preset_id)
+    if preset is None:
+        return jsonify({"ok": False, "error": "El preset seleccionado no está disponible para esta empresa."}), 400
+
+    logo, error = _logo_validado(empresa.id, datos)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    aplicacion = datos.get("aplicacion") or "sin_logo"
+    if aplicacion not in APLICACIONES_LOGO:
+        return jsonify({"ok": False, "error": "Modo de aplicación inválido."}), 400
+    if aplicacion != "sin_logo" and logo is None:
+        return jsonify({"ok": False, "error": "Selecciona un logo para aplicar."}), 400
+
+    posicion = datos.get("posicion") or POSICION_LOGO_PREDETERMINADA
+    if posicion not in POSICIONES_LOGO:
+        return jsonify({"ok": False, "error": "Posición inválida."}), 400
+
+    try:
+        opacidad = float(datos.get("opacidad", 0.8))
+    except (TypeError, ValueError):
+        opacidad = 0.8
+    opacidad = max(0.15, min(1.0, opacidad))
+
+    tipos_validos = TIPOS_FORMATO + ["mejora_automatica"]
+    formatos_pedidos = [f for f in (datos.get("formatos") or []) if f in tipos_validos]
+    if not formatos_pedidos:
+        return jsonify({"ok": False, "error": "Selecciona al menos un tipo de resultado."}), 400
+
+    nombre = (datos.get("nombre") or "").strip() or f"Sesión {proyecto.nombre}"
+
+    sesion = crear_sesion(
+        empresa.id,
+        proyecto.id,
+        nombre,
+        fotografia_ids,
+        preset.id,
+        usuario["id"],
+        logo_id=logo.id if logo else None,
+        aplicacion_logo=aplicacion,
+        posicion_logo=posicion,
+        opacidad_logo=opacidad,
+        formatos=formatos_pedidos,
+    )
+    return jsonify({"ok": True, "sesion_id": sesion.id, "url": url_for("fotografia.sesion_detalle", sesion_id=sesion.id)}), 201
+
+
+@fotografia_bp.get("/sesiones/<int:sesion_id>")
+@login_required
+def sesion_detalle(sesion_id):
+    empresa, _rol, sesion = _sesion_de_empresa_activa(sesion_id)
+    items = obtener_items_sesion(sesion.id)
+    proyecto = obtener_proyecto(empresa.id, sesion.proyecto_id)
+    return render_template(
+        "photo_studio/sesion_detalle.html",
+        empresa_activa=empresa,
+        sesion=sesion,
+        items=items,
+        proyecto=proyecto,
+    )
+
+
+@fotografia_bp.post("/sesiones/<int:sesion_id>/analizar")
+@login_required
+def sesion_analizar(sesion_id):
+    """Analiza TODAS las fotografias de la sesion (Paso 10: sin
+    muestreo en esta primera version) y calcula los promedios que
+    luego se usan para la consistencia entre fotografias.
+    """
+    empresa, _rol, sesion = _sesion_de_empresa_activa(sesion_id)
+
+    if not storage_configurado():
+        return jsonify({"ok": False, "error": "El almacenamiento no está disponible en este momento."}), 503
+
+    analizar_sesion(sesion.id)
+    sesion = obtener_sesion(empresa.id, sesion.id)
+
+    return jsonify(
+        {
+            "ok": True,
+            "estado": sesion.estado,
+            "analisis": {
+                "brillo_promedio": sesion.analisis_brillo_promedio,
+                "contraste_promedio": sesion.analisis_contraste_promedio,
+                "saturacion_promedio": sesion.analisis_saturacion_promedio,
+                "temperatura_predominante": sesion.analisis_temperatura_predominante,
+                "duracion_segundos": sesion.analisis_duracion_segundos,
+            },
+        }
+    )
+
+
+@fotografia_bp.post("/sesiones/<int:sesion_id>/procesar-uno")
+@login_required
+def sesion_procesar_uno(sesion_id):
+    """Procesa la siguiente fotografia pendiente de la sesion (una
+    peticion = una fotografia, igual que el resto de los lotes de
+    Photo Studio). El cliente llama a este endpoint repetidamente
+    hasta que `sesion_terminada` sea verdadero -- el progreso que
+    muestra siempre viene de contadores reales, nunca simulados.
+    """
+    empresa, _rol, sesion = _sesion_de_empresa_activa(sesion_id)
+
+    if not storage_configurado():
+        return jsonify({"ok": False, "error": "El almacenamiento no está disponible en este momento."}), 503
+
+    item, terminada = procesar_siguiente_item(sesion.id)
+    sesion = obtener_sesion(empresa.id, sesion.id)
+
+    respuesta = {
+        "ok": True,
+        "sesion_terminada": terminada,
+        "sesion_estado": sesion.estado,
+        "completadas": sesion.completadas,
+        "errores": sesion.errores,
+        "total": sesion.total_fotografias,
+    }
+    if item is not None:
+        respuesta["item"] = {
+            "id": item.id,
+            "fotografia_id": item.fotografia_id,
+            "nombre_archivo": item.fotografia.nombre_archivo_original,
+            "estado": item.estado,
+            "error": item.error_mensaje,
+        }
+    return jsonify(respuesta)
+
+
+@fotografia_bp.post("/sesiones/<int:sesion_id>/cancelar")
+@login_required
+def sesion_cancelar(sesion_id):
+    empresa, _rol, sesion = _sesion_de_empresa_activa(sesion_id)
+    sesion = cancelar_sesion(sesion.id)
+    return jsonify({"ok": True, "estado": sesion.estado})
 
 
 @fotografia_bp.route("/fotos/<int:fotografia_id>/eliminar", methods=["GET", "POST"])

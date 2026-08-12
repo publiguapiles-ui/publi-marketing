@@ -16,6 +16,13 @@ from app.models.fotografia_derivada import (
     MODOS_RECORTE,
     MODO_RECORTE_PREDETERMINADO,
 )
+from app.models.preset import Preset, SLUGS_PRESETS_SISTEMA
+from app.models.sesion_fotografica import (
+    SesionFotografica,
+    SesionItem,
+    ESTADOS_SESION,
+    ESTADOS_SESION_TERMINALES,
+)
 
 __all__ = [
     "Usuario",
@@ -37,4 +44,10 @@ __all__ = [
     "POSICION_LOGO_PREDETERMINADA",
     "MODOS_RECORTE",
     "MODO_RECORTE_PREDETERMINADO",
+    "Preset",
+    "SLUGS_PRESETS_SISTEMA",
+    "SesionFotografica",
+    "SesionItem",
+    "ESTADOS_SESION",
+    "ESTADOS_SESION_TERMINALES",
 ]

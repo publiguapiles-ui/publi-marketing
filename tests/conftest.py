@@ -27,6 +27,7 @@ def app():
     from app import create_app
     from app.extensions import db as _db
     from app.models import Rol
+    from app.services.presets import sembrar_presets_sistema
 
     aplicacion = create_app("development")
     aplicacion.config["TESTING"] = True
@@ -36,6 +37,7 @@ def app():
         for nombre in ["Administrador", "Editor", "Cliente"]:
             _db.session.add(Rol(nombre=nombre))
         _db.session.commit()
+        sembrar_presets_sistema()
 
         yield aplicacion
 

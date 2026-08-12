@@ -953,3 +953,185 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.ps-panel-sesion {
+  max-width: 480px;
+}
+
+/* Photo Studio: procesamiento masivo / sesiones (Paso 10).
+   Oscuro y acotado a esta pantalla -- no toca las variables globales
+   de la plataforma ni el resto del diseño. */
+
+.ps-sesion {
+  --ps-fondo: #14161c;
+  --ps-superficie: #1c1f27;
+  --ps-borde: #2c3038;
+  --ps-texto: #e8e9ec;
+  --ps-texto-tenue: #9195a0;
+  --ps-acento: #6ea8fe;
+  --ps-exito: #34d399;
+  --ps-error: #f87171;
+
+  background: var(--ps-fondo);
+  color: var(--ps-texto);
+  border-radius: 12px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ps-sesion-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-bottom: 1px solid var(--ps-borde);
+  padding-bottom: 20px;
+}
+
+.ps-sesion-titulo {
+  margin: 0 0 6px;
+  color: var(--ps-texto);
+}
+
+.ps-sesion-sub {
+  margin: 0;
+  color: var(--ps-texto-tenue);
+  font-size: 14px;
+}
+
+.ps-sesion-acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ps-estado-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #333844;
+  color: var(--ps-texto);
+}
+.ps-estado-badge[data-estado="completada"] { background: #14532d; color: var(--ps-exito); }
+.ps-estado-badge[data-estado="completada_con_errores"] { background: #4a3a12; color: #fbbf24; }
+.ps-estado-badge[data-estado="error"],
+.ps-estado-badge[data-estado="cancelada"] { background: #4a1f1f; color: var(--ps-error); }
+.ps-estado-badge[data-estado="procesando"],
+.ps-estado-badge[data-estado="analizando"] { background: #1e3a5f; color: var(--ps-acento); }
+
+.boton-primario-oscuro,
+.boton-secundario-oscuro,
+.boton-peligro-oscuro {
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.boton-primario-oscuro {
+  background: var(--ps-acento);
+  color: #0b1220;
+}
+.boton-primario-oscuro:disabled {
+  background: #394150;
+  color: #7a8090;
+  cursor: not-allowed;
+}
+.boton-secundario-oscuro {
+  background: transparent;
+  border-color: var(--ps-borde);
+  color: var(--ps-texto);
+}
+.boton-peligro-oscuro {
+  background: transparent;
+  border-color: var(--ps-error);
+  color: var(--ps-error);
+}
+
+.ps-caja-oscura {
+  background: var(--ps-superficie);
+  border: 1px solid var(--ps-borde);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.ps-caja-oscura h2 {
+  margin: 0 0 14px;
+  font-size: 15px;
+  color: var(--ps-texto);
+}
+
+.ps-datos-oscuros {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+.ps-datos-oscuros dt { color: var(--ps-texto-tenue); font-size: 13px; }
+.ps-datos-oscuros dd { margin: 0; font-size: 13px; }
+
+.ps-progreso-contador {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+.ps-barra-oscura {
+  height: 8px;
+  background: #2a2e37;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.ps-barra-relleno {
+  height: 100%;
+  background: var(--ps-acento);
+  transition: width 0.2s ease;
+}
+
+.ps-progreso-actual {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ps-texto-tenue);
+  min-height: 18px;
+}
+
+.ps-progreso-resumen {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ps-texto-tenue);
+}
+
+.ps-lista-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ps-lista-items li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--ps-borde);
+  font-size: 13px;
+}
+.ps-item-nombre { color: var(--ps-texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-item-estado { color: var(--ps-texto-tenue); flex-shrink: 0; }
+.ps-lista-items li[data-estado="completada"] .ps-item-estado { color: var(--ps-exito); }
+.ps-lista-items li[data-estado="error"] .ps-item-estado { color: var(--ps-error); }
+.ps-lista-items li[data-estado="procesando"] .ps-item-estado { color: var(--ps-acento); }
+
+@media (max-width: 768px) {
+  .ps-sesion { padding: 18px; }
+  .ps-sesion-cabecera { flex-direction: column; }
+}

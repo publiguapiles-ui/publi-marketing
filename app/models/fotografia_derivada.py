@@ -82,6 +82,14 @@ class FotografiaDerivada(db.Model):
     crop_height = db.Column(db.Integer)
     algoritmo_recorte = db.Column(db.String(30))  # ej. "rostros", "saliencia", "manual"
 
+    # Paso 10: si este derivado se genero como parte de un procesamiento
+    # masivo, referencia a esa sesion (para poder listar/agrupar
+    # "sesion_001 -> fotografia_001 -> mejorada_v1, cuadrado_v1..."). Un
+    # derivado creado por las rutas individuales existentes (Paso 7/8)
+    # simplemente deja esto en None -- no cambia su comportamiento.
+    sesion_id = db.Column(db.Integer, db.ForeignKey("sesiones_fotograficas.id", ondelete="SET NULL"), nullable=True, index=True)
+    preset_id = db.Column(db.Integer, db.ForeignKey("presets.id", ondelete="SET NULL"), nullable=True)
+
     creado_por = db.Column(db.String(36), db.ForeignKey("usuarios.id"), nullable=True)
 
     creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
@@ -95,6 +103,8 @@ class FotografiaDerivada(db.Model):
     fotografia = db.relationship("Fotografia")
     empresa = db.relationship("Empresa")
     logo = db.relationship("Logo")
+    sesion = db.relationship("SesionFotografica")
+    preset = db.relationship("Preset")
 
     def __repr__(self):
         return f"<FotografiaDerivada {self.tipo} v{self.version} foto={self.fotografia_id} estado={self.estado}>"

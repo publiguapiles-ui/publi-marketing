@@ -28,9 +28,84 @@
     <span id="texto-seleccion">0 fotografías seleccionadas</span>
     <button type="button" id="boton-mejorar-seleccion" class="boton-secundario">Mejorar fotografías</button>
     <button type="button" id="boton-abrir-formatos" class="boton-secundario">Generar formatos</button>
+    <button type="button" id="boton-abrir-sesion" class="boton-primario">Procesar sesión</button>
     <button type="button" class="boton-secundario" disabled title="Próximamente">Colorizar</button>
     <button type="button" class="boton-secundario" disabled title="Próximamente">Descargar selección</button>
   </div>
+</div>
+
+<div id="panel-sesion" class="ps-preparar-columna ps-panel-lote ps-panel-sesion" hidden>
+  <h2 class="ps-seccion-titulo">Nueva sesión de procesamiento</h2>
+  <p class="perfil-nota"><span id="sesion-conteo-fotos">0</span> fotografías seleccionadas</p>
+  <form id="form-sesion" class="formulario-simple">
+    <label>
+      Nombre de la sesión
+      <input type="text" name="nombre" placeholder="Sesión {{ proyecto.nombre }}" />
+    </label>
+
+    <label>
+      Preset
+      <select id="sesion-campo-preset" name="preset_id">
+        {% for preset in presets %}
+        <option value="{{ preset.id }}" title="{{ preset.descripcion }}" {% if preset_automatico and preset.id == preset_automatico.id %}selected{% endif %}>
+          {{ preset.nombre }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Logo
+      <select id="sesion-campo-logo" name="logo_id" {% if not logos %}disabled{% endif %}>
+        <option value="">Sin logos disponibles</option>
+        {% for logo in logos %}
+        <option value="{{ logo.id }}" {% if logo_principal and logo.id == logo_principal.id %}selected{% endif %}>
+          {{ logo.nombre_archivo_original }} ({{ logo.tipo }})
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <fieldset class="campo-radios">
+      <legend>Aplicación</legend>
+      <label class="opcion-radio"><input type="radio" name="aplicacion" value="sin_logo" checked /> Sin logo</label>
+      <label class="opcion-radio"><input type="radio" name="aplicacion" value="logo" /> Logo</label>
+      <label class="opcion-radio"><input type="radio" name="aplicacion" value="marca_agua" /> Marca de agua</label>
+    </fieldset>
+
+    <label>
+      Posición
+      <select id="sesion-campo-posicion" name="posicion">
+        {% for pos in posiciones %}
+        <option value="{{ pos }}" {% if pos == posicion_predeterminada %}selected{% endif %}>{{ pos.replace("_", " ")|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Opacidad: <span id="sesion-valor-opacidad">80%</span>
+      <input type="range" id="sesion-campo-opacidad" name="opacidad" min="15" max="100" value="80" />
+    </label>
+
+    <h2 class="ps-seccion-titulo">Resultados a generar</h2>
+    <div class="campo-formatos">
+      <label class="opcion-check"><input type="checkbox" name="formatos" value="mejora_automatica" checked /> Original mejorada</label>
+      {% for formato in formatos %}
+      {% if formato != "formato_horizontal" %}
+      <label class="opcion-check">
+        <input type="checkbox" name="formatos" value="{{ formato }}" />
+        {% if formato == "formato_cuadrado" %}Cuadrado (1080 × 1080)
+        {% elif formato == "formato_vertical" %}Vertical (1080 × 1350)
+        {% elif formato == "formato_historia" %}Historia (1080 × 1920)
+        {% endif %}
+      </label>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    <button type="submit" id="boton-crear-sesion" class="boton-primario">Procesar sesión</button>
+    <button type="button" id="boton-cancelar-sesion" class="boton-secundario">Cancelar</button>
+  </form>
 </div>
 
 <div id="panel-formatos-lote" class="ps-preparar-columna ps-panel-lote" hidden>
@@ -118,6 +193,7 @@
   window.PS_SUBIR_URL = "{{ url_for('fotografia.subir_foto', proyecto_id=proyecto.id) }}";
   window.PS_MEJORAR_URL_BASE = "{{ url_for('fotografia.foto_mejorar', fotografia_id=0) }}".replace("/0/", "/__ID__/");
   window.PS_PREPARAR_URL_BASE = "{{ url_for('fotografia.foto_preparar', fotografia_id=0) }}".replace("/0/", "/__ID__/");
+  window.PS_SESION_NUEVA_URL = "{{ url_for('fotografia.sesion_nueva', proyecto_id=proyecto.id) }}";
 </script>
 <script src="{{ url_for('static', filename='js/photo_studio.js') }}"></script>
 {% endblock %}

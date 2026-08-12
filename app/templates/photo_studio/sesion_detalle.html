@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titulo %}{{ sesion.nombre }} · Photo Studio{% endblock %}
+{% block contenido %}
+<a href="{{ url_for('fotografia.proyecto_detalle', proyecto_id=proyecto.id) }}" class="boton-enlace">← {{ proyecto.nombre }}</a>
+
+<div class="ps-sesion">
+  <div class="ps-sesion-cabecera">
+    <div>
+      <h1 class="ps-sesion-titulo">{{ sesion.nombre }}</h1>
+      <p class="ps-sesion-sub">
+        Preset: <strong>{{ sesion.preset.nombre }}</strong> ·
+        {{ sesion.total_fotografias }} fotografía{{ "s" if sesion.total_fotografias != 1 else "" }} ·
+        <span id="sesion-estado-badge" class="ps-estado-badge" data-estado="{{ sesion.estado }}">{{ sesion.estado.replace("_", " ") }}</span>
+      </p>
+    </div>
+    <div class="ps-sesion-acciones">
+      <button type="button" id="boton-analizar" class="boton-secundario-oscuro">Analizar sesión</button>
+      <button type="button" id="boton-procesar" class="boton-primario-oscuro" disabled>Procesar sesión</button>
+      <button type="button" id="boton-cancelar" class="boton-peligro-oscuro" hidden>Cancelar</button>
+    </div>
+  </div>
+
+  <div id="ps-analisis-caja" class="ps-caja-oscura" hidden>
+    <h2>Análisis de la sesión</h2>
+    <dl class="ps-datos-oscuros">
+      <dt>Brillo promedio</dt><dd id="analisis-brillo">-</dd>
+      <dt>Contraste promedio</dt><dd id="analisis-contraste">-</dd>
+      <dt>Saturación promedio</dt><dd id="analisis-saturacion">-</dd>
+      <dt>Temperatura predominante</dt><dd id="analisis-temperatura">-</dd>
+      <dt>Tiempo de análisis</dt><dd id="analisis-duracion">-</dd>
+    </dl>
+  </div>
+
+  <div class="ps-caja-oscura">
+    <h2>Progreso</h2>
+    <p id="ps-progreso-contador" class="ps-progreso-contador">{{ sesion.completadas + sesion.errores }} / {{ sesion.total_fotografias }}</p>
+    <div class="ps-barra-oscura"><div id="ps-barra-relleno" class="ps-barra-relleno" style="width: {{ ((sesion.completadas + sesion.errores) / sesion.total_fotografias * 100) if sesion.total_fotografias else 0 }}%"></div></div>
+    <p id="ps-progreso-actual" class="ps-progreso-actual">&nbsp;</p>
+    <p class="ps-progreso-resumen">
+      <span id="ps-resumen-completadas">{{ sesion.completadas }}</span> completadas ·
+      <span id="ps-resumen-errores">{{ sesion.errores }}</span> con error ·
+      <span id="ps-resumen-pendientes">{{ sesion.total_fotografias - sesion.completadas - sesion.errores }}</span> pendientes
+    </p>
+  </div>
+
+  <div class="ps-caja-oscura">
+    <h2>Fotografías</h2>
+    <ul id="ps-lista-items" class="ps-lista-items">
+      {% for item in items %}
+      <li data-item-id="{{ item.id }}" data-estado="{{ item.estado }}">
+        <span class="ps-item-nombre">{{ item.fotografia.nombre_archivo_original }}</span>
+        <span class="ps-item-estado">{{ item.estado }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<script>
+  window.PS_SESION_ID = {{ sesion.id }};
+  window.PS_SESION_ANALIZAR_URL = "{{ url_for('fotografia.sesion_analizar', sesion_id=sesion.id) }}";
+  window.PS_SESION_PROCESAR_URL = "{{ url_for('fotografia.sesion_procesar_uno', sesion_id=sesion.id) }}";
+  window.PS_SESION_CANCELAR_URL = "{{ url_for('fotografia.sesion_cancelar', sesion_id=sesion.id) }}";
+  window.PS_SESION_ESTADO_INICIAL = {{ sesion.estado|tojson }};
+  window.PS_SESION_ANALIZADA = {{ (sesion.analisis_brillo_promedio is not none)|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/photo_studio_sesion.js') }}"></script>
+{% endblock %}

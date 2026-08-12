@@ -179,11 +179,16 @@ def _mascara_proteccion_rostros(tamano, rostros, expansion=0.25, difuminado_px=1
     return mascara
 
 
-def _ajustar_exposicion(imagen, analisis):
+def _ajustar_exposicion(imagen, analisis, objetivo_brillo=0.5):
     """Correccion por gamma (no un +/-% fijo): protege altas luces y
     sombras profundas mucho mejor que escalar el brillo linealmente.
+
+    `objetivo_brillo` es el unico grado de libertad que un preset
+    (Paso 10) puede sesgar -- el mecanismo (gamma proporcional a la
+    distancia al objetivo) no cambia, así que una foto lejos del
+    objetivo sigue recibiendo mas correccion que una ya cercana.
     """
-    diferencia = 0.5 - analisis["brillo_promedio"]
+    diferencia = objetivo_brillo - analisis["brillo_promedio"]
     if abs(diferencia) <= 0.03:
         return imagen
     gamma = float(np.clip(1.0 - diferencia * 0.9, 0.6, 1.6))
@@ -192,10 +197,16 @@ def _ajustar_exposicion(imagen, analisis):
     return Image.fromarray(np.clip(arr * 255, 0, 255).astype(np.uint8))
 
 
-def _ajustar_balance_blancos(imagen, analisis):
+def _ajustar_balance_blancos(imagen, analisis, sesgo_calidez=0.0):
     """Correccion PARCIAL (50%) hacia gris neutro -- nunca neutraliza
     del todo, para respetar la intencion visual de la escena (ver
     restriccion del Paso 7 sobre balance de blancos).
+
+    `sesgo_calidez` (Paso 10, -1..1) empuja el resultado un poco mas
+    alla del neutro: positivo = mas calido, negativo = mas frio. Con
+    sesgo 0.0 (preset "Automatico") el rango de recorte es exactamente
+    el mismo (0.85-1.15) que antes de este paso -- el comportamiento
+    por defecto no cambia ni un bit.
     """
     arr = np.asarray(imagen).astype(np.float32)
     r_medio, g_medio, b_medio = arr[..., 0].mean(), arr[..., 1].mean(), arr[..., 2].mean()
@@ -203,38 +214,45 @@ def _ajustar_balance_blancos(imagen, analisis):
     if gris_medio < 1:
         return imagen
 
-    factor_r = float(np.clip(1 + ((gris_medio / max(r_medio, 1)) - 1) * 0.5, 0.85, 1.15))
-    factor_b = float(np.clip(1 + ((gris_medio / max(b_medio, 1)) - 1) * 0.5, 0.85, 1.15))
+    factor_r = 1 + ((gris_medio / max(r_medio, 1)) - 1) * 0.5
+    factor_b = 1 + ((gris_medio / max(b_medio, 1)) - 1) * 0.5
+    factor_r *= 1 + sesgo_calidez * 0.08
+    factor_b *= 1 - sesgo_calidez * 0.08
+
+    margen = 0.15 + abs(sesgo_calidez) * 0.15
+    factor_r = float(np.clip(factor_r, 1 - margen, 1 + margen))
+    factor_b = float(np.clip(factor_b, 1 - margen, 1 + margen))
     arr[..., 0] = arr[..., 0] * factor_r
     arr[..., 2] = arr[..., 2] * factor_b
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
-def _ajustar_contraste(imagen, analisis):
-    objetivo = 0.22
-    if analisis["contraste"] >= objetivo:
+def _ajustar_contraste(imagen, analisis, objetivo_contraste=0.22):
+    if analisis["contraste"] >= objetivo_contraste:
         return imagen  # ya tiene buen contraste: no forzar mas (evita clipping)
-    factor = float(np.clip(1 + (objetivo - analisis["contraste"]) * 1.5, 1.0, 1.3))
+    factor = float(np.clip(1 + (objetivo_contraste - analisis["contraste"]) * 1.5, 1.0, 1.3))
     return ImageEnhance.Contrast(imagen).enhance(factor)
 
 
-def _ajustar_saturacion(imagen, analisis):
+def _ajustar_saturacion(imagen, analisis, objetivo_saturacion=0.35, factor_maximo_saturacion=1.35):
     """Aproximacion de "vibrance": cuanto mas apagados esten los colores
     mayor es el impulso; si ya estan vivos, el ajuste es minimo (evita
     piel naranja, cielos irreales, vegetacion artificial).
+
+    `factor_maximo_saturacion` es el techo absoluto (Paso 10): incluso
+    el preset "Vibrante" lo mantiene moderado, nunca sobresaturado.
     """
-    objetivo = 0.35
-    if analisis["saturacion_media"] >= objetivo:
+    if analisis["saturacion_media"] >= objetivo_saturacion:
         factor = 1.05
     else:
-        factor = float(np.clip(1 + (objetivo - analisis["saturacion_media"]) * 1.2, 1.05, 1.35))
+        factor = float(np.clip(1 + (objetivo_saturacion - analisis["saturacion_media"]) * 1.2, 1.05, factor_maximo_saturacion))
     return ImageEnhance.Color(imagen).enhance(factor)
 
 
-def _ajustar_nitidez(imagen):
+def _ajustar_nitidez(imagen, intensidad_nitidez=80):
     ancho, alto = imagen.size
     radio = max(1, min(3, round(max(ancho, alto) / 1000)))
-    return imagen.filter(ImageFilter.UnsharpMask(radius=radio, percent=80, threshold=3))
+    return imagen.filter(ImageFilter.UnsharpMask(radius=radio, percent=intensidad_nitidez, threshold=3))
 
 
 def _reducir_ruido_si_hace_falta(imagen, analisis):
@@ -243,13 +261,67 @@ def _reducir_ruido_si_hace_falta(imagen, analisis):
     return imagen.filter(ImageFilter.MedianFilter(size=3)), True
 
 
-def mejorar_fotografia(bytes_originales):
+
+# Objetivos usados cuando no se pasa preset -- EXACTAMENTE los valores
+# que este motor ya usaba como constantes fijas antes del Paso 10.
+# `presets.py` los replica en su entrada "automatico"; se mantienen
+# duplicados a proposito (procesamiento.py no depende de presets.py)
+# para que este modulo siga siendo utilizable de forma aislada.
+PARAMETROS_POR_DEFECTO = {
+    "objetivo_brillo": 0.5,
+    "objetivo_contraste": 0.22,
+    "objetivo_saturacion": 0.35,
+    "factor_maximo_saturacion": 1.35,
+    "sesgo_calidez": 0.0,
+    "intensidad_nitidez": 80,
+}
+
+
+def _resolver_parametros(preset, contexto_sesion):
+    """Combina los objetivos del preset (o los valores por defecto) con
+    un pequeno sesgo hacia el promedio de la sesion, si se paso uno
+    (Paso 10, "Consistencia entre fotografias"): el preset define el
+    ESTILO, el contexto de sesion solo lo empuja levemente para que
+    las fotos de un mismo lote no se vean como estilos distintos --
+    nunca reemplaza el objetivo del preset, solo lo desplaza un 25%
+    hacia la media real de esta sesion en particular.
+    """
+    parametros = dict(PARAMETROS_POR_DEFECTO)
+    if preset:
+        parametros.update({clave: valor for clave, valor in preset.items() if clave in parametros})
+
+    if contexto_sesion:
+        peso = 0.25
+        if contexto_sesion.get("brillo_promedio") is not None:
+            parametros["objetivo_brillo"] = (
+                parametros["objetivo_brillo"] * (1 - peso) + contexto_sesion["brillo_promedio"] * peso
+            )
+        if contexto_sesion.get("contraste_promedio") is not None:
+            parametros["objetivo_contraste"] = (
+                parametros["objetivo_contraste"] * (1 - peso) + contexto_sesion["contraste_promedio"] * peso
+            )
+        if contexto_sesion.get("saturacion_promedio") is not None:
+            parametros["objetivo_saturacion"] = (
+                parametros["objetivo_saturacion"] * (1 - peso) + contexto_sesion["saturacion_promedio"] * peso
+            )
+    return parametros
+
+
+def mejorar_fotografia(bytes_originales, preset=None, contexto_sesion=None):
     """Analiza + corrige una fotografia. Devuelve (bytes_resultado, metadata).
 
     No recibe ni toca el archivo original en Storage: trabaja solo con
     los bytes que se le pasan y devuelve un resultado nuevo en memoria.
+
+    `preset` (Paso 10) es un dict opcional de objetivos (ver
+    PARAMETROS_POR_DEFECTO) que sesga la correccion; sin el (el uso
+    existente desde el Paso 7), el comportamiento es identico al que
+    tenia esta funcion antes de que existieran los presets.
+    `contexto_sesion` es un dict opcional con promedios de la sesion
+    para mantener consistencia entre muchas fotografias del mismo lote.
     """
     inicio = time.time()
+    parametros = _resolver_parametros(preset, contexto_sesion)
 
     imagen = cargar_imagen(bytes_originales)
     analisis = analizar_imagen(imagen)
@@ -257,11 +329,11 @@ def mejorar_fotografia(bytes_originales):
     categoria, confianza = clasificar_imagen(analisis, rostros)
 
     corregida = imagen
-    corregida = _ajustar_exposicion(corregida, analisis)
-    corregida = _ajustar_balance_blancos(corregida, analisis)
-    corregida = _ajustar_contraste(corregida, analisis)
-    corregida = _ajustar_saturacion(corregida, analisis)
-    corregida = _ajustar_nitidez(corregida)
+    corregida = _ajustar_exposicion(corregida, analisis, parametros["objetivo_brillo"])
+    corregida = _ajustar_balance_blancos(corregida, analisis, parametros["sesgo_calidez"])
+    corregida = _ajustar_contraste(corregida, analisis, parametros["objetivo_contraste"])
+    corregida = _ajustar_saturacion(corregida, analisis, parametros["objetivo_saturacion"], parametros["factor_maximo_saturacion"])
+    corregida = _ajustar_nitidez(corregida, parametros["intensidad_nitidez"])
     corregida, ruido_reducido = _reducir_ruido_si_hace_falta(corregida, analisis)
 
     rostros_protegidos = False
@@ -294,5 +366,6 @@ def mejorar_fotografia(bytes_originales):
         "rostros_protegidos": rostros_protegidos,
         "correcciones_aplicadas": correcciones,
         "duracion_segundos": round(time.time() - inicio, 3),
+        "parametros_utilizados": parametros,
     }
     return bytes_resultado, metadata

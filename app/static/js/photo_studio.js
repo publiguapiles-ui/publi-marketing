@@ -243,4 +243,83 @@
       panelFormatosLote.hidden = true;
     });
   }
+
+  // --- Nueva sesion de procesamiento masivo (Paso 10) ---
+  const botonAbrirSesion = document.getElementById("boton-abrir-sesion");
+  const panelSesion = document.getElementById("panel-sesion");
+  const formSesion = document.getElementById("form-sesion");
+  const botonCancelarSesion = document.getElementById("boton-cancelar-sesion");
+  const sesionCampoOpacidad = document.getElementById("sesion-campo-opacidad");
+  const sesionValorOpacidad = document.getElementById("sesion-valor-opacidad");
+  const sesionConteoFotos = document.getElementById("sesion-conteo-fotos");
+
+  if (botonAbrirSesion && panelSesion) {
+    botonAbrirSesion.addEventListener("click", () => {
+      const marcadas = document.querySelectorAll(".check-foto:checked").length;
+      if (sesionConteoFotos) sesionConteoFotos.textContent = marcadas;
+      panelSesion.hidden = !panelSesion.hidden;
+    });
+  }
+  if (botonCancelarSesion && panelSesion) {
+    botonCancelarSesion.addEventListener("click", () => {
+      panelSesion.hidden = true;
+    });
+  }
+  if (sesionCampoOpacidad && sesionValorOpacidad) {
+    sesionCampoOpacidad.addEventListener("input", () => {
+      sesionValorOpacidad.textContent = `${sesionCampoOpacidad.value}%`;
+    });
+  }
+
+  if (formSesion && window.PS_SESION_NUEVA_URL) {
+    formSesion.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fotografia_ids = Array.from(document.querySelectorAll(".check-foto:checked")).map((c) => Number(c.value));
+      if (!fotografia_ids.length) {
+        alert("Selecciona al menos una fotografía.");
+        return;
+      }
+      const formatosSesion = Array.from(formSesion.querySelectorAll('input[name="formatos"]:checked')).map((c) => c.value);
+      if (!formatosSesion.length) {
+        alert("Selecciona al menos un resultado a generar.");
+        return;
+      }
+      const aplicacionMarcada = formSesion.querySelector('input[name="aplicacion"]:checked');
+
+      const cuerpo = {
+        nombre: formSesion.querySelector('[name="nombre"]').value,
+        fotografia_ids,
+        preset_id: Number(document.getElementById("sesion-campo-preset").value),
+        logo_id: document.getElementById("sesion-campo-logo").value || null,
+        aplicacion: aplicacionMarcada ? aplicacionMarcada.value : "sin_logo",
+        posicion: document.getElementById("sesion-campo-posicion").value,
+        opacidad: Number(sesionCampoOpacidad.value) / 100,
+        formatos: formatosSesion,
+      };
+
+      const botonCrearSesion = document.getElementById("boton-crear-sesion");
+      botonCrearSesion.disabled = true;
+      botonCrearSesion.textContent = "Creando sesión...";
+
+      try {
+        const resp = await fetch(window.PS_SESION_NUEVA_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cuerpo),
+        });
+        const datos = await resp.json();
+        if (datos.ok) {
+          window.location = datos.url;
+        } else {
+          alert(datos.error || "No se pudo crear la sesión.");
+          botonCrearSesion.disabled = false;
+          botonCrearSesion.textContent = "Procesar sesión";
+        }
+      } catch (err) {
+        alert("Error de conexión. Intenta de nuevo.");
+        botonCrearSesion.disabled = false;
+        botonCrearSesion.textContent = "Procesar sesión";
+      }
+    });
+  }
 })();

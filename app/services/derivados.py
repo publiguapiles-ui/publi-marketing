@@ -73,11 +73,19 @@ def mejor_base_disponible(fotografia):
     return BUCKET_FOTOGRAFIAS, fotografia.ruta_storage
 
 
-def crear_mejora_automatica(empresa_id, proyecto_id, fotografia, usuario_id):
+def crear_mejora_automatica(empresa_id, proyecto_id, fotografia, usuario_id, preset=None, contexto_sesion=None, sesion_id=None):
     """Crea (sincronamente, via services/tareas.py) una version mejorada
     de `fotografia`. Devuelve el registro FotografiaDerivada, con
     estado "completada" o "error" (el error se guarda en el registro,
     nunca se pierde silenciosamente y nunca toca el original).
+
+    `preset` (Paso 10), si se pasa, DEBE ser un objeto Preset ya
+    validado por el llamador (ver app/services/presets.py) -- sin el,
+    el comportamiento es identico al que tenia esta funcion antes de
+    que existieran los presets. `contexto_sesion` es el dict de
+    promedios de la sesion (consistencia entre fotografias) y
+    `sesion_id` solo etiqueta el derivado para poder agruparlo despues;
+    ninguno de los dos cambia como se valida o se sube el archivo.
     """
     from app.extensions import db
     from app.models import FotografiaDerivada
@@ -96,6 +104,8 @@ def crear_mejora_automatica(empresa_id, proyecto_id, fotografia, usuario_id):
         tipo="mejora_automatica",
         version=_siguiente_version(fotografia.id, "mejora_automatica"),
         estado="pendiente",
+        sesion_id=sesion_id,
+        preset_id=preset.id if preset else None,
         creado_por=usuario_id,
     )
     db.session.add(derivado)
@@ -109,7 +119,11 @@ def crear_mejora_automatica(empresa_id, proyecto_id, fotografia, usuario_id):
             bytes_originales = descargar_archivo(BUCKET_FOTOGRAFIAS, fotografia.ruta_storage)
             hash_antes = _hash(bytes_originales)
 
-            bytes_resultado, metadata = mejorar_fotografia(bytes_originales)
+            bytes_resultado, metadata = mejorar_fotografia(
+                bytes_originales,
+                preset=preset.parametros if preset else None,
+                contexto_sesion=contexto_sesion,
+            )
 
             # Verificacion de integridad del original (Paso 7, punto 31):
             # se vuelve a descargar y se compara el hash. Si cambio, es un
@@ -144,7 +158,7 @@ def crear_mejora_automatica(empresa_id, proyecto_id, fotografia, usuario_id):
     return encolar(_procesar)
 
 
-def crear_formato(empresa_id, proyecto_id, fotografia, usuario_id, tipo_formato, logo=None, aplicacion="sin_logo", posicion="inferior_derecha", opacidad=0.8, modo="auto", focus_x=None, focus_y=None, zoom=1.0):
+def crear_formato(empresa_id, proyecto_id, fotografia, usuario_id, tipo_formato, logo=None, aplicacion="sin_logo", posicion="inferior_derecha", opacidad=0.8, modo="auto", focus_x=None, focus_y=None, zoom=1.0, sesion_id=None):
     """Crea (sincronamente, via services/tareas.py) un formato para
     redes sociales (cuadrado/vertical/historia/horizontal), con logo o
     marca de agua opcional y encuadre automatico o manual (Paso 9).
@@ -178,6 +192,7 @@ def crear_formato(empresa_id, proyecto_id, fotografia, usuario_id, tipo_formato,
         posicion_logo=posicion if aplicacion != "sin_logo" else None,
         opacidad_logo=opacidad if aplicacion != "sin_logo" else None,
         crop_mode=modo,
+        sesion_id=sesion_id,
         creado_por=usuario_id,
     )
     db.session.add(derivado)
