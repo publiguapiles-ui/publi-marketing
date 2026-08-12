@@ -1,0 +1,131 @@
+:root {
+  --color-bg: #f5f6f8;
+  --color-sidebar: #1f2937;
+  --color-sidebar-texto: #e5e7eb;
+  --color-sidebar-hover: #374151;
+  --color-texto: #1f2937;
+  --color-borde: #d1d5db;
+  --color-acento: #2563eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-texto);
+}
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 220px;
+  background: var(--color-sidebar);
+  color: var(--color-sidebar-texto);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.sidebar-brand {
+  padding: 20px 16px;
+  font-weight: bold;
+  font-size: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.sidebar-nav a {
+  color: var(--color-sidebar-texto);
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.sidebar-nav a:hover {
+  background: var(--color-sidebar-hover);
+}
+
+.contenido-principal {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.header-usuario {
+  font-size: 14px;
+  color: var(--color-texto);
+}
+
+.area-principal {
+  padding: 24px;
+  flex: 1;
+}
+
+.proximamente {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+.proximamente-icono {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.error-pagina {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    transform: translateX(-100%);
+    z-index: 100;
+  }
+
+  .sidebar.abierto {
+    transform: translateX(0);
+  }
+
+  .menu-toggle {
+    display: block;
+  }
+}

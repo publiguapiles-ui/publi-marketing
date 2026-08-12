@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block titulo %}Publi Marketing{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">Publi Marketing</div>
+      <nav class="sidebar-nav">
+        <a href="{{ url_for('dashboard.index') }}">Dashboard</a>
+        <a href="{{ url_for('empresas.index') }}">Empresas</a>
+        <a href="{{ url_for('clientes.index') }}">Clientes</a>
+        <a href="{{ url_for('contenido.index') }}">Contenido</a>
+        <a href="{{ url_for('fotografia.index') }}">Fotografía</a>
+        <a href="{{ url_for('diseno.index') }}">Diseño</a>
+        <a href="{{ url_for('ia.index') }}">IA</a>
+        <a href="{{ url_for('calendario.index') }}">Calendario</a>
+        <a href="{{ url_for('redes_sociales.index') }}">Redes Sociales</a>
+        <a href="{{ url_for('campanas.index') }}">Campañas</a>
+        <a href="{{ url_for('analitica.index') }}">Analítica</a>
+        <a href="{{ url_for('informes.index') }}">Informes</a>
+        <a href="{{ url_for('biblioteca.index') }}">Biblioteca</a>
+        <a href="{{ url_for('configuracion.index') }}">Configuración</a>
+      </nav>
+    </aside>
+
+    <div class="contenido-principal">
+      <header class="header">
+        <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menú">☰</button>
+        <div class="header-usuario">Invitado</div>
+      </header>
+
+      <main class="area-principal">
+        {% block contenido %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

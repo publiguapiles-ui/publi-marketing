@@ -9,7 +9,7 @@ document.getElementById("form-crear").addEventListener("submit", async (e) => {
   resultado.textContent = "Creando...";
 
   try {
-    const res = await fetch("/solicitudes", {
+    const res = await fetch("/legacy/solicitudes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nombre, contacto, fecha_hora }),
@@ -36,7 +36,7 @@ document.getElementById("form-consultar").addEventListener("submit", async (e) =
   resultado.textContent = "Consultando...";
 
   try {
-    const res = await fetch(`/solicitudes/${encodeURIComponent(codigo)}`);
+    const res = await fetch(`/legacy/solicitudes/${encodeURIComponent(codigo)}`);
     const data = await res.json();
 
     if (!res.ok) {
