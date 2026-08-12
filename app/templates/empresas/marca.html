@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titulo %}Identidad de marca · {{ empresa.nombre }}{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <h1>Identidad de marca</h1>
+  <a href="{{ url_for('empresas.detalle', slug=empresa.slug) }}" class="boton-enlace">← {{ empresa.nombre }}</a>
+</div>
+
+{% if error %}
+<div class="login-error" role="alert">{{ error }}</div>
+{% endif %}
+
+<form method="post" class="formulario-simple formulario-marca">
+  <label>
+    Nombre comercial
+    <input type="text" name="nombre_comercial" value="{{ identidad.nombre_comercial if identidad else '' }}" />
+  </label>
+
+  <label>
+    Color principal
+    <div class="campo-color">
+      <input type="text" name="color_principal" placeholder="#E31E24"
+             value="{{ identidad.color_principal if identidad else '' }}" />
+      <span class="muestra-color" style="background: {{ (identidad.color_principal if identidad else '') or 'transparent' }}"></span>
+    </div>
+  </label>
+
+  <label>
+    Color secundario
+    <div class="campo-color">
+      <input type="text" name="color_secundario" placeholder="#000000"
+             value="{{ identidad.color_secundario if identidad else '' }}" />
+      <span class="muestra-color" style="background: {{ (identidad.color_secundario if identidad else '') or 'transparent' }}"></span>
+    </div>
+  </label>
+
+  <label>
+    Color de texto
+    <div class="campo-color">
+      <input type="text" name="color_texto" placeholder="#111111"
+             value="{{ identidad.color_texto if identidad else '' }}" />
+      <span class="muestra-color" style="background: {{ (identidad.color_texto if identidad else '') or 'transparent' }}"></span>
+    </div>
+  </label>
+
+  <label>
+    Color de fondo
+    <div class="campo-color">
+      <input type="text" name="color_fondo" placeholder="#FFFFFF"
+             value="{{ identidad.color_fondo if identidad else '' }}" />
+      <span class="muestra-color" style="background: {{ (identidad.color_fondo if identidad else '') or 'transparent' }}"></span>
+    </div>
+  </label>
+
+  <button type="submit" class="boton-primario">Guardar</button>
+</form>
+<p class="perfil-nota">Todos los colores son opcionales. Usa el formato HEX, por ejemplo #E31E24.</p>
+
+<p><a href="{{ url_for('empresas.logos', slug=empresa.slug) }}">Ir a la biblioteca de logos →</a></p>
+{% endblock %}

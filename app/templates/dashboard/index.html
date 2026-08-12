@@ -8,6 +8,13 @@
   <h2>{{ empresa_activa.nombre }}</h2>
   <p>Tu rol: <strong>{{ rol_activo.nombre }}</strong></p>
   <p>Estado: {{ "Activa" if empresa_activa.activo else "Inactiva" }}</p>
+
+  <div class="dashboard-identidad">
+    <h3>Identidad de marca</h3>
+    <p>Logo principal: {{ "configurado" if logo_principal else "no configurado" }}</p>
+    <p>Colores: {{ "configurados" if identidad and identidad.tiene_colores() else "no configurados" }}</p>
+    <a href="{{ url_for('empresas.marca', slug=empresa_activa.slug) }}">Configurar identidad →</a>
+  </div>
 </div>
 {% elif empresas_usuario %}
 <div class="estado-vacio">

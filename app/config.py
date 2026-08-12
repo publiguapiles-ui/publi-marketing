@@ -18,6 +18,11 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 
+    # Limite global de tamano de request (ademas de la validacion propia
+    # de app/services/storage.py) para rechazar subidas enormes antes de
+    # que lleguen siquiera a la logica de la aplicacion.
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
+
 
 class DevelopmentConfig(Config):
     DEBUG = True

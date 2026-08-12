@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titulo %}Eliminar logo · {{ empresa.nombre }}{% endblock %}
+{% block contenido %}
+<h1>Eliminar logo</h1>
+<p>¿Seguro que quieres eliminar <strong>{{ logo.nombre_archivo_original }}</strong> ({{ logo.tipo|capitalize|replace("_", " ") }})?</p>
+
+{% if logo.es_principal or logo.es_marca_agua %}
+<div class="login-aviso" role="alert">
+  {% if logo.es_principal %}Este logo está marcado como <strong>logo principal</strong> de la empresa.{% endif %}
+  {% if logo.es_marca_agua %}Este logo está marcado como <strong>marca de agua</strong>.{% endif %}
+  Si lo eliminas, ninguno quedará marcado como tal hasta que elijas otro.
+</div>
+{% endif %}
+
+<form method="post" class="formulario-simple">
+  <button type="submit" class="boton-primario enlace-peligro-boton">Sí, eliminar</button>
+</form>
+<p class="perfil-nota"><a href="{{ url_for('empresas.logos', slug=empresa.slug) }}">Cancelar</a></p>
+{% endblock %}

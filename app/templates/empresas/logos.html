@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block titulo %}Logos · {{ empresa.nombre }}{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <h1>Biblioteca de logos</h1>
+  <div>
+    <a href="{{ url_for('empresas.detalle', slug=empresa.slug) }}" class="boton-enlace">← {{ empresa.nombre }}</a>
+    <a href="{{ url_for('empresas.logo_nuevo', slug=empresa.slug) }}" class="boton-primario">+ Subir logo</a>
+  </div>
+</div>
+
+{% if logos %}
+<div class="grilla-logos">
+  {% for logo, url in logos %}
+  <div class="tarjeta-logo">
+    <div class="tarjeta-logo-preview">
+      {% if url %}
+      <img src="{{ url }}" alt="{{ logo.tipo }}" />
+      {% else %}
+      <span class="tarjeta-logo-sin-preview">Sin vista previa</span>
+      {% endif %}
+    </div>
+    <div class="tarjeta-logo-info">
+      <strong>{{ logo.tipo|capitalize|replace("_", " ") }}</strong>
+      {% if logo.es_principal %}<span class="etiqueta etiqueta-principal">Principal</span>{% endif %}
+      {% if logo.es_marca_agua %}<span class="etiqueta etiqueta-marca-agua">Marca de agua</span>{% endif %}
+      <p class="tarjeta-logo-meta">
+        {{ logo.nombre_archivo_original }}<br />
+        {{ logo.tipo_mime }} · {{ (logo.tamano_bytes / 1024) | round(1) }} KB<br />
+        Subido: {{ logo.creado_en.strftime("%Y-%m-%d %H:%M") }}<br />
+        Estado: {{ "Activo" if logo.activo else "Inactivo" }}
+      </p>
+      <div class="tarjeta-logo-acciones">
+        {% if not logo.es_principal %}
+        <form method="post" action="{{ url_for('empresas.logo_marcar_principal', slug=empresa.slug, logo_id=logo.id) }}">
+          <button type="submit" class="boton-enlace">Marcar como principal</button>
+        </form>
+        {% endif %}
+        {% if not logo.es_marca_agua %}
+        <form method="post" action="{{ url_for('empresas.logo_marcar_marca_agua', slug=empresa.slug, logo_id=logo.id) }}">
+          <button type="submit" class="boton-enlace">Marcar como marca de agua</button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('empresas.logo_reemplazar', slug=empresa.slug, logo_id=logo.id) }}">Reemplazar</a>
+        <a href="{{ url_for('empresas.logo_eliminar', slug=empresa.slug, logo_id=logo.id) }}" class="enlace-peligro">Eliminar</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="estado-vacio">
+  <p>Todavía no hay logos en la biblioteca de esta empresa.</p>
+  <a href="{{ url_for('empresas.logo_nuevo', slug=empresa.slug) }}">Subir el primer logo</a>
+</div>
+{% endif %}
+{% endblock %}

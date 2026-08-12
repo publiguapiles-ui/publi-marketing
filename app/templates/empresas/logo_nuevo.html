@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Subir logo · {{ empresa.nombre }}{% endblock %}
+{% block contenido %}
+<h1>Subir logo</h1>
+
+{% if error %}
+<div class="login-error" role="alert">{{ error }}</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="formulario-simple">
+  <label>
+    Tipo de logo
+    <select name="tipo" required>
+      <option value="">Selecciona un tipo</option>
+      {% for tipo in tipos %}
+      <option value="{{ tipo }}">{{ tipo|capitalize|replace("_", " ") }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Archivo (PNG, JPG o WebP, máx. 15 MB)
+    <input type="file" name="archivo" accept=".png,.jpg,.jpeg,.webp" required />
+  </label>
+  <button type="submit" class="boton-primario">Subir</button>
+</form>
+
+<p class="perfil-nota"><a href="{{ url_for('empresas.logos', slug=empresa.slug) }}">Volver a la biblioteca</a></p>
+{% endblock %}

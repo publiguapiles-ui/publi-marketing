@@ -396,3 +396,126 @@ body {
     display: block;
   }
 }
+
+/* Identidad de marca y logos (Paso 5) */
+
+.formulario-marca {
+  max-width: 420px;
+}
+
+.campo-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.campo-color input {
+  flex: 1;
+}
+
+.muestra-color {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--color-borde);
+  flex-shrink: 0;
+}
+
+.dashboard-identidad {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-borde);
+}
+
+.dashboard-identidad h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.dashboard-identidad p {
+  margin: 2px 0;
+  font-size: 14px;
+}
+
+.grilla-logos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.tarjeta-logo {
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tarjeta-logo-preview {
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 50% / 20px 20px;
+}
+
+.tarjeta-logo-preview img {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+}
+
+.tarjeta-logo-sin-preview {
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.tarjeta-logo-info {
+  padding: 12px;
+}
+
+.etiqueta {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.etiqueta-principal {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.etiqueta-marca-agua {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.tarjeta-logo-meta {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.tarjeta-logo-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.tarjeta-logo-acciones form {
+  margin: 0;
+}
+
+.enlace-peligro {
+  color: #b91c1c;
+}
+
+.enlace-peligro-boton {
+  background: #b91c1c;
+}

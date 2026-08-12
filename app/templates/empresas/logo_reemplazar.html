@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block titulo %}Reemplazar logo · {{ empresa.nombre }}{% endblock %}
+{% block contenido %}
+<h1>Reemplazar logo: {{ logo.tipo|capitalize|replace("_", " ") }}</h1>
+<p class="perfil-nota">Archivo actual: {{ logo.nombre_archivo_original }} ({{ logo.tipo_mime }})</p>
+
+{% if error %}
+<div class="login-error" role="alert">{{ error }}</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="formulario-simple">
+  <label>
+    Nuevo archivo (PNG, JPG o WebP, máx. 15 MB)
+    <input type="file" name="archivo" accept=".png,.jpg,.jpeg,.webp" required />
+  </label>
+  <button type="submit" class="boton-primario">Reemplazar</button>
+</form>
+
+<p class="perfil-nota"><a href="{{ url_for('empresas.logos', slug=empresa.slug) }}">Cancelar y volver</a></p>
+{% endblock %}

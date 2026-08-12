@@ -10,5 +10,9 @@
   <dt>Tu rol</dt>
   <dd>{{ rol.nombre }}</dd>
 </dl>
-<p class="perfil-nota">Logo, colores e información comercial se agregarán en una etapa posterior.</p>
+
+<div class="cabecera-seccion">
+  <a href="{{ url_for('empresas.marca', slug=empresa.slug) }}" class="boton-enlace">Identidad de marca</a>
+  <a href="{{ url_for('empresas.logos', slug=empresa.slug) }}" class="boton-enlace">Biblioteca de logos</a>
+</div>
 {% endblock %}
