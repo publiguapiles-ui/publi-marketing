@@ -519,3 +519,255 @@ body {
 .enlace-peligro-boton {
   background: #b91c1c;
 }
+
+/* Photo Studio (Paso 6) */
+
+.ps-encabezado {
+  margin-bottom: 20px;
+}
+
+.ps-subtitulo {
+  color: #6b7280;
+  margin: 4px 0 0;
+}
+
+.ps-seccion-titulo {
+  font-size: 16px;
+  margin: 24px 0 12px;
+}
+
+.empresa-activa-badge {
+  font-size: 14px;
+  color: var(--color-texto);
+}
+
+.boton-secundario {
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.boton-secundario:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  background: var(--color-bg);
+}
+
+.grilla-proyectos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.tarjeta-proyecto {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 16px;
+  text-decoration: none;
+  color: var(--color-texto);
+}
+
+.tarjeta-proyecto:hover {
+  border-color: var(--color-acento);
+}
+
+.tarjeta-proyecto-icono {
+  font-size: 28px;
+}
+
+.tarjeta-proyecto-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tarjeta-proyecto-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.zona-subida {
+  border: 2px dashed var(--color-borde);
+  border-radius: 10px;
+  padding: 40px 20px;
+  text-align: center;
+  background: #fff;
+  margin-bottom: 20px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.zona-subida-activa {
+  border-color: var(--color-acento);
+  background: #eff6ff;
+}
+
+.zona-subida-texto {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.zona-subida-o {
+  color: #6b7280;
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+
+.progreso-subida {
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.barra-progreso {
+  background: var(--color-bg);
+  border-radius: 6px;
+  height: 10px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.barra-progreso-relleno {
+  background: var(--color-acento);
+  height: 100%;
+  width: 0%;
+  transition: width 0.2s ease;
+}
+
+#progreso-resumen {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.ps-galeria-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.barra-seleccion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #111827;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.barra-seleccion[hidden] {
+  display: none;
+}
+
+.barra-seleccion .boton-secundario {
+  background: #1f2937;
+  color: #fff;
+  border-color: #374151;
+}
+
+.grilla-fotos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.tarjeta-foto {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tarjeta-foto-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+  padding: 2px;
+  display: flex;
+}
+
+.tarjeta-foto-preview {
+  display: block;
+  height: 150px;
+  background: repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 50% / 20px 20px;
+}
+
+.tarjeta-foto-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tarjeta-foto-info {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tarjeta-foto-nombre {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tarjeta-foto-meta {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: capitalize;
+}
+
+.foto-detalle {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  gap: 24px;
+}
+
+.foto-detalle-imagen {
+  background: repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 50% / 20px 20px;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.foto-detalle-imagen img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.foto-detalle-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+@media (max-width: 768px) {
+  .foto-detalle {
+    grid-template-columns: 1fr;
+  }
+}

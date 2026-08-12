@@ -1,15 +1,22 @@
 """Acceso a Supabase Storage para archivos de la plataforma.
 
-Bucket privado (nunca publico): solo se accede via URLs firmadas de
+Buckets privados (nunca publicos): solo se accede via URLs firmadas de
 corta duracion, generadas server-side despues de validar que el
 usuario tiene acceso a la empresa duena del archivo. La `service_role
 key` que esto usa nunca sale del backend.
 
-Formatos de logo permitidos: PNG, JPEG y WebP. SVG queda deshabilitado
-deliberadamente por ahora: un SVG puede contener <script> embebido y
-ejecutarse si el navegador lo abre directamente (no solo via <img>),
-y sanitizarlo correctamente requeriria una libreria adicional que no
-se justifica en este paso.
+Un unico sistema de almacenamiento para toda la plataforma -- logos
+(Paso 5) y fotografias (Photo Studio) usan estas mismas funciones,
+cada uno en su propio bucket, en vez de duplicar la logica.
+
+Formatos permitidos: PNG, JPEG y WebP. SVG y RAW quedan deshabilitados
+deliberadamente: SVG puede contener <script> embebido y ejecutarse si
+el navegador lo abre directamente (no solo via <img>); RAW (CR2, NEF,
+ARW, DNG, ...) comparte firmas de bytes con TIFF generico entre
+fabricantes, por lo que no se puede distinguir con confianza solo por
+los primeros bytes, y ademas todavia no hay nada en la plataforma que
+sepa procesarlo. Ambos quedan como trabajo futuro documentado, no como
+un descuido.
 """
 
 import os
@@ -19,8 +26,10 @@ import uuid
 from supabase import create_client
 
 BUCKET_LOGOS = "logos"
+BUCKET_FOTOGRAFIAS = "fotografias"
 
-TAMANO_MAXIMO_BYTES = 15 * 1024 * 1024  # 15 MB
+TAMANO_MAXIMO_BYTES = 15 * 1024 * 1024  # 15 MB (logos)
+TAMANO_MAXIMO_FOTO_BYTES = 30 * 1024 * 1024  # 30 MB (fotografias originales)
 
 EXTENSIONES_PERMITIDAS = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
 
@@ -61,35 +70,44 @@ def ruta_logo(empresa_id, tipo, tipo_mime):
     return f"empresas/{empresa_id}/branding/logos/{tipo}/{int(time.time())}-{sufijo}.{extension}"
 
 
-def subir_archivo(ruta, contenido, tipo_mime):
+def ruta_fotografia_original(empresa_id, proyecto_id, tipo_mime):
+    extension = EXTENSIONES_PERMITIDAS.get(tipo_mime, "bin")
+    sufijo = uuid.uuid4().hex[:8]
+    return (
+        f"empresas/{empresa_id}/fotografia/proyectos/{proyecto_id}/originales/"
+        f"{int(time.time())}-{sufijo}.{extension}"
+    )
+
+
+def subir_archivo(bucket, ruta, contenido, tipo_mime):
     cliente = _cliente()
     if cliente is None:
         raise RuntimeError("Supabase Storage no esta configurado")
-    cliente.storage.from_(BUCKET_LOGOS).upload(ruta, contenido, {"content-type": tipo_mime})
+    cliente.storage.from_(bucket).upload(ruta, contenido, {"content-type": tipo_mime})
 
 
-def eliminar_archivo(ruta):
+def eliminar_archivo(bucket, ruta):
     """Borrado best-effort: si falla, no debe romper el flujo principal
-    (el registro en la base de datos es la fuente de verdad de la
-    biblioteca; un archivo huerfano en Storage no es un problema
-    critico, pero un error aqui no debe impedir que el usuario complete
-    su accion en la app).
+    (el registro en la base de datos es la fuente de verdad; un
+    archivo huerfano en Storage no es un problema critico, pero un
+    error aqui no debe impedir que el usuario complete su accion).
     """
     cliente = _cliente()
     if cliente is None:
         return
     try:
-        cliente.storage.from_(BUCKET_LOGOS).remove([ruta])
+        cliente.storage.from_(bucket).remove([ruta])
     except Exception:
         pass
 
 
-def url_firmada(ruta, segundos=3600):
+def url_firmada(bucket, ruta, segundos=3600, nombre_descarga=None):
     cliente = _cliente()
     if cliente is None:
         return None
     try:
-        resultado = cliente.storage.from_(BUCKET_LOGOS).create_signed_url(ruta, segundos)
+        opciones = {"download": nombre_descarga} if nombre_descarga else None
+        resultado = cliente.storage.from_(bucket).create_signed_url(ruta, segundos, opciones)
         return resultado.get("signedURL") or resultado.get("signedUrl")
     except Exception:
         return None

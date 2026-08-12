@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block titulo %}Photo Studio · Publi Marketing{% endblock %}
+{% block contenido %}
+<div class="ps-encabezado">
+  <h1>Photo Studio</h1>
+  <p class="ps-subtitulo">Gestiona, organiza y prepara tus fotografías.</p>
+</div>
+
+{% if not empresa_activa %}
+<div class="estado-vacio">
+  <p>Selecciona o crea una empresa para empezar a usar Photo Studio.</p>
+  <a href="{{ url_for('empresas.nueva') }}">Crear tu primera empresa</a>
+</div>
+{% else %}
+<div class="cabecera-seccion">
+  <span class="empresa-activa-badge">Empresa activa: <strong>{{ empresa_activa.nombre }}</strong></span>
+  <a href="{{ url_for('fotografia.proyecto_nuevo') }}" class="boton-primario">+ Nuevo proyecto</a>
+</div>
+
+<h2 class="ps-seccion-titulo">Proyectos</h2>
+
+{% if proyectos %}
+<div class="grilla-proyectos">
+  {% for proyecto, num_fotos in proyectos %}
+  <a href="{{ url_for('fotografia.proyecto_detalle', proyecto_id=proyecto.id) }}" class="tarjeta-proyecto">
+    <div class="tarjeta-proyecto-icono">📁</div>
+    <div class="tarjeta-proyecto-info">
+      <strong>{{ proyecto.nombre }}</strong>
+      <span class="tarjeta-proyecto-meta">{{ num_fotos }} fotografía{{ "s" if num_fotos != 1 else "" }} · {{ proyecto.estado }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="estado-vacio">
+  <p>Todavía no tienes ningún proyecto fotográfico en esta empresa.</p>
+  <a href="{{ url_for('fotografia.proyecto_nuevo') }}">Crear tu primer proyecto</a>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

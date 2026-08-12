@@ -26,6 +26,7 @@ from app.services.marca import (
     reemplazar_archivo_logo,
 )
 from app.services.storage import (
+    BUCKET_LOGOS,
     TAMANO_MAXIMO_BYTES,
     detectar_tipo_mime_real,
     ruta_logo,
@@ -160,7 +161,7 @@ def marca(slug):
 def logos(slug):
     empresa, _usuario = _obtener_empresa_autorizada(slug)
     lista = obtener_logos_empresa(empresa.id)
-    logos_con_url = [(logo, url_firmada(logo.ruta_storage)) for logo in lista]
+    logos_con_url = [(logo, url_firmada(BUCKET_LOGOS, logo.ruta_storage)) for logo in lista]
     return render_template("empresas/logos.html", empresa=empresa, logos=logos_con_url)
 
 
@@ -191,7 +192,7 @@ def logo_nuevo(slug):
                 else:
                     ruta = ruta_logo(empresa.id, tipo, tipo_mime)
                     try:
-                        subir_archivo(ruta, contenido, tipo_mime)
+                        subir_archivo(BUCKET_LOGOS, ruta, contenido, tipo_mime)
                     except Exception:
                         error = "No se pudo subir el archivo. Intenta de nuevo."
                     else:
@@ -244,7 +245,7 @@ def logo_reemplazar(slug, logo_id):
                 else:
                     ruta = ruta_logo(empresa.id, logo.tipo, tipo_mime)
                     try:
-                        subir_archivo(ruta, contenido, tipo_mime)
+                        subir_archivo(BUCKET_LOGOS, ruta, contenido, tipo_mime)
                     except Exception:
                         error = "No se pudo subir el archivo. Intenta de nuevo."
                     else:

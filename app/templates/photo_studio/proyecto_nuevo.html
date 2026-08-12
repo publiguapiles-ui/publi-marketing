@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titulo %}Nuevo proyecto · Photo Studio{% endblock %}
+{% block contenido %}
+<h1>Nuevo proyecto fotográfico</h1>
+<p class="perfil-nota">Empresa: {{ empresa_activa.nombre }}</p>
+
+{% if error %}
+<div class="login-error" role="alert">{{ error }}</div>
+{% endif %}
+
+<form method="post" class="formulario-simple">
+  <label>
+    Nombre
+    <input type="text" name="nombre" value="{{ nombre }}" placeholder="Sesión Agosto" required autofocus />
+  </label>
+  <label>
+    Descripción (opcional)
+    <textarea name="descripcion" rows="3" placeholder="Fotografías de productos para redes sociales.">{{ descripcion }}</textarea>
+  </label>
+  <button type="submit" class="boton-primario">Crear proyecto</button>
+</form>
+<p class="perfil-nota"><a href="{{ url_for('fotografia.index') }}">Cancelar</a></p>
+{% endblock %}

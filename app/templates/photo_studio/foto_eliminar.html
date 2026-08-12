@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block titulo %}Eliminar fotografía · Photo Studio{% endblock %}
+{% block contenido %}
+<h1>¿Eliminar fotografía?</h1>
+<p>El archivo original se eliminará de este proyecto. Esta acción no debe realizarse accidentalmente.</p>
+<p class="perfil-nota"><strong>{{ foto.nombre_archivo_original }}</strong></p>
+
+<form method="post" class="formulario-simple">
+  <button type="submit" class="boton-primario enlace-peligro-boton">Sí, eliminar</button>
+</form>
+<p class="perfil-nota"><a href="{{ url_for('fotografia.foto_detalle', fotografia_id=foto.id) }}">Cancelar</a></p>
+{% endblock %}

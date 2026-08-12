@@ -4,3 +4,4 @@ venv/
 .env
 instance/
 *.local.txt
+.pytest_cache/

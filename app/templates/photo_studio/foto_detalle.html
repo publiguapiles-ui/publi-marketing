@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block titulo %}{{ foto.nombre_archivo_original }} · Photo Studio{% endblock %}
+{% block contenido %}
+<a href="{{ url_for('fotografia.proyecto_detalle', proyecto_id=proyecto.id) }}" class="boton-enlace">← {{ proyecto.nombre }}</a>
+
+<div class="foto-detalle">
+  <div class="foto-detalle-imagen">
+    {% if url %}
+    <img src="{{ url }}" alt="{{ foto.nombre_archivo_original }}" />
+    {% else %}
+    <span class="tarjeta-logo-sin-preview">Sin vista previa</span>
+    {% endif %}
+  </div>
+
+  <div class="foto-detalle-panel">
+    <h1>{{ foto.nombre_archivo_original }}</h1>
+    <dl class="perfil-datos">
+      <dt>Proyecto</dt>
+      <dd>{{ proyecto.nombre }}</dd>
+      <dt>Empresa</dt>
+      <dd>{{ empresa_activa.nombre }}</dd>
+      <dt>Fecha de subida</dt>
+      <dd>{{ foto.creado_en.strftime("%Y-%m-%d %H:%M") }}</dd>
+      <dt>Tamaño</dt>
+      <dd>{{ (foto.tamano_bytes / 1024 / 1024) | round(2) }} MB</dd>
+      <dt>Formato</dt>
+      <dd>{{ foto.tipo_mime }}</dd>
+      <dt>Estado</dt>
+      <dd>{{ foto.estado }}</dd>
+    </dl>
+
+    <div class="foto-detalle-acciones">
+      <a href="{{ url_for('fotografia.foto_descargar', fotografia_id=foto.id) }}" class="boton-primario">Descargar original</a>
+      <button type="button" class="boton-secundario" disabled title="Próximamente">Editar</button>
+      <button type="button" class="boton-secundario" disabled title="Próximamente">Formatos</button>
+      <button type="button" class="boton-secundario" disabled title="Próximamente">Logo</button>
+    </div>
+
+    <p class="perfil-nota"><a href="{{ url_for('fotografia.foto_eliminar', fotografia_id=foto.id) }}" class="enlace-peligro">Eliminar fotografía</a></p>
+  </div>
+</div>
+{% endblock %}

@@ -46,8 +46,11 @@ class Config:
 
     # Limite global de tamano de request (ademas de la validacion propia
     # de app/services/storage.py) para rechazar subidas enormes antes de
-    # que lleguen siquiera a la logica de la aplicacion.
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
+    # que lleguen siquiera a la logica de la aplicacion. 35 MB porque
+    # Photo Studio sube fotografias originales de hasta 30 MB cada una
+    # (una request HTTP por archivo -- ver app/static/js/photo_studio.js);
+    # el margen extra cubre el overhead de multipart/form-data.
+    MAX_CONTENT_LENGTH = 35 * 1024 * 1024  # 35 MB
 
 
 class DevelopmentConfig(Config):

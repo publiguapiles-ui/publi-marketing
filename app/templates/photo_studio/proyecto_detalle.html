@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titulo %}{{ proyecto.nombre }} · Photo Studio{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <a href="{{ url_for('fotografia.index') }}" class="boton-enlace">← Photo Studio</a>
+    <h1>{{ proyecto.nombre }}</h1>
+    {% if proyecto.descripcion %}<p class="perfil-nota">{{ proyecto.descripcion }}</p>{% endif %}
+  </div>
+</div>
+
+<div id="zona-subida" class="zona-subida">
+  <p class="zona-subida-texto">Arrastra tus fotografías aquí</p>
+  <p class="zona-subida-o">o selecciona archivos</p>
+  <button type="button" id="boton-seleccionar" class="boton-primario">Seleccionar fotografías</button>
+  <input type="file" id="input-fotos" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple hidden />
+</div>
+
+<div id="progreso-subida" class="progreso-subida" hidden>
+  <p id="progreso-texto">Subiendo fotografías...</p>
+  <div class="barra-progreso"><div id="barra-progreso-relleno" class="barra-progreso-relleno"></div></div>
+  <p id="progreso-resumen"></p>
+</div>
+
+<div class="ps-galeria-cabecera">
+  <h2 class="ps-seccion-titulo">Galería</h2>
+  <div id="barra-seleccion" class="barra-seleccion" hidden>
+    <span id="texto-seleccion">0 fotografías seleccionadas</span>
+    <button type="button" class="boton-secundario" disabled title="Próximamente">Procesar</button>
+    <button type="button" class="boton-secundario" disabled title="Próximamente">Colorizar</button>
+    <button type="button" class="boton-secundario" disabled title="Próximamente">Generar formatos</button>
+    <button type="button" class="boton-secundario" disabled title="Próximamente">Aplicar logo</button>
+    <button type="button" class="boton-secundario" disabled title="Próximamente">Descargar selección</button>
+  </div>
+</div>
+
+{% if fotos %}
+<div class="grilla-fotos" id="grilla-fotos">
+  {% for foto, url in fotos %}
+  <div class="tarjeta-foto" data-id="{{ foto.id }}">
+    <label class="tarjeta-foto-check">
+      <input type="checkbox" class="check-foto" value="{{ foto.id }}" />
+    </label>
+    <a href="{{ url_for('fotografia.foto_detalle', fotografia_id=foto.id) }}" class="tarjeta-foto-preview">
+      {% if url %}
+      <img src="{{ url }}" alt="{{ foto.nombre_archivo_original }}" />
+      {% else %}
+      <span class="tarjeta-logo-sin-preview">Sin vista previa</span>
+      {% endif %}
+    </a>
+    <div class="tarjeta-foto-info">
+      <span class="tarjeta-foto-nombre">{{ foto.nombre_archivo_original }}</span>
+      <span class="tarjeta-foto-meta">{{ foto.estado }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="estado-vacio" id="galeria-vacia">
+  <p>Todavía no hay fotografías en este proyecto. Sube las primeras arriba.</p>
+</div>
+{% endif %}
+
+<script>
+  window.PS_SUBIR_URL = "{{ url_for('fotografia.subir_foto', proyecto_id=proyecto.id) }}";
+</script>
+<script src="{{ url_for('static', filename='js/photo_studio.js') }}"></script>
+{% endblock %}
