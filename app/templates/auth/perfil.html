@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block titulo %}Mi perfil · Publi Marketing{% endblock %}
+{% block contenido %}
+<h1>Mi perfil</h1>
+<dl class="perfil-datos">
+  <dt>Nombre</dt>
+  <dd>{{ usuario.nombre or "No configurado" }}</dd>
+  <dt>Correo electrónico</dt>
+  <dd>{{ usuario.email }}</dd>
+  <dt>Estado de sesión</dt>
+  <dd>Activa</dd>
+</dl>
+<p class="perfil-nota">Próximamente: foto de perfil, teléfono, cargo y preferencias.</p>
+{% endblock %}

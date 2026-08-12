@@ -88,6 +88,59 @@ body {
 .header-usuario {
   font-size: 14px;
   color: var(--color-texto);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-usuario-nombre {
+  color: var(--color-texto);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.header-usuario-nombre:hover {
+  text-decoration: underline;
+}
+
+.header-logout-form {
+  margin: 0;
+}
+
+.header-logout-boton {
+  background: none;
+  border: 1px solid var(--color-borde);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--color-texto);
+  cursor: pointer;
+}
+
+.header-logout-boton:hover {
+  background: var(--color-bg);
+}
+
+.perfil-datos {
+  max-width: 420px;
+}
+
+.perfil-datos dt {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-top: 16px;
+}
+
+.perfil-datos dd {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+
+.perfil-nota {
+  color: #6b7280;
+  font-size: 13px;
+  margin-top: 24px;
 }
 
 .area-principal {
@@ -109,6 +162,104 @@ body {
 .error-pagina {
   text-align: center;
   padding: 80px 20px;
+}
+
+.pagina-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+.login-contenedor {
+  width: 100%;
+  max-width: 380px;
+  padding: 20px;
+}
+
+.login-tarjeta {
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 10px;
+  padding: 32px 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.login-marca {
+  margin: 0 0 4px;
+  font-size: 22px;
+  text-align: center;
+}
+
+.login-subtitulo {
+  margin: 0 0 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.login-tarjeta form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-tarjeta label {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--color-texto);
+  gap: 6px;
+}
+
+.login-tarjeta input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-borde);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.login-tarjeta input:focus {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 1px;
+}
+
+.login-tarjeta button {
+  margin-top: 6px;
+  padding: 11px;
+  background: var(--color-acento);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-tarjeta button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.login-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.login-aviso {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 16px;
 }
 
 @media (max-width: 768px) {

@@ -1,8 +1,11 @@
 from flask import Blueprint, render_template
 
+from app.core.decorators import login_required
+
 
 def crear_modulo_proximamente(slug, nombre, icono="🔧"):
-    """Crea un Blueprint minimo con una pantalla "Proximamente".
+    """Crea un Blueprint minimo con una pantalla "Proximamente", ya
+    protegido con login_required (es una ruta privada de Publi Marketing).
 
     Se usa para reservar el lugar de los modulos que la arquitectura ya
     contempla pero que todavia no tienen funcionalidad real, sin
@@ -12,6 +15,7 @@ def crear_modulo_proximamente(slug, nombre, icono="🔧"):
     bp = Blueprint(slug, __name__, url_prefix=f"/{slug}")
 
     @bp.route("/")
+    @login_required
     def index():
         return render_template("modulo_proximamente.html", nombre=nombre, icono=icono)
 

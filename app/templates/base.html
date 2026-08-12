@@ -31,7 +31,18 @@
     <div class="contenido-principal">
       <header class="header">
         <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menú">☰</button>
-        <div class="header-usuario">Invitado</div>
+        <div class="header-usuario">
+          {% if usuario_actual %}
+            <a href="{{ url_for('auth.perfil') }}" class="header-usuario-nombre">
+              {{ usuario_actual.nombre or usuario_actual.email }}
+            </a>
+            <form method="post" action="{{ url_for('auth.logout') }}" class="header-logout-form">
+              <button type="submit" class="header-logout-boton">Cerrar sesión</button>
+            </form>
+          {% else %}
+            <a href="{{ url_for('auth.login') }}">Iniciar sesión</a>
+          {% endif %}
+        </div>
       </header>
 
       <main class="area-principal">

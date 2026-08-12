@@ -1,8 +1,39 @@
-{% extends "base.html" %}
-{% block titulo %}Iniciar sesión · Publi Marketing{% endblock %}
-{% block contenido %}
-<div class="login-placeholder">
-  <h1>Iniciar sesión</h1>
-  <p>El inicio de sesión con Supabase Auth se implementará en el siguiente paso.</p>
-</div>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iniciar sesión · Publi Marketing</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+</head>
+<body class="pagina-login">
+  <div class="login-contenedor">
+    <div class="login-tarjeta">
+      <h1 class="login-marca">Publi Marketing</h1>
+      <p class="login-subtitulo">Inicia sesión para continuar</p>
+
+      {% if sesion_expirada %}
+      <div class="login-aviso" role="status">Tu sesión expiró. Inicia sesión de nuevo.</div>
+      {% endif %}
+
+      {% if error %}
+      <div class="login-error" role="alert">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" id="form-login" novalidate>
+        <label>
+          Correo electrónico
+          <input type="email" name="email" value="{{ email }}" required autofocus />
+        </label>
+        <label>
+          Contraseña
+          <input type="password" name="password" required />
+        </label>
+        <button type="submit" id="boton-login">Iniciar sesión</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/login.js') }}"></script>
+</body>
+</html>

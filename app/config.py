@@ -12,6 +12,12 @@ class Config:
     SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
     SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
+    # La sesion (usuario_id, tokens de Supabase) vive en la cookie de
+    # Flask, firmada con SECRET_KEY. HttpOnly evita que JavaScript la lea;
+    # SameSite=Lax mitiga CSRF basico.
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
@@ -20,11 +26,15 @@ class DevelopmentConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL", "sqlite:///" + os.path.join(INSTANCE_DIR, "dev.db")
     )
+    # False en desarrollo porque localhost normalmente no usa HTTPS.
+    SESSION_COOKIE_SECURE = False
 
 
 class ProductionConfig(Config):
     DEBUG = False
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
+    # La cookie de sesion solo viaja por HTTPS en produccion.
+    SESSION_COOKIE_SECURE = True
 
 
 config_por_nombre = {

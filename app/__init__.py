@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, url_for
 
 from app.config import INSTANCE_DIR, config_por_nombre
+from app.core.auth import obtener_usuario_actual
 from app.core.errors import registrar_manejadores_error
 from app.extensions import db, migrate
 
@@ -25,6 +26,10 @@ def create_app(nombre_config=None):
 
     registrar_manejadores_error(app)
     registrar_blueprints(app)
+
+    @app.context_processor
+    def inyectar_usuario_actual():
+        return {"usuario_actual": obtener_usuario_actual()}
 
     @app.get("/health")
     def health():
