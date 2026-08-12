@@ -5,12 +5,29 @@ import urllib.request
 from datetime import datetime
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from supabase import create_client
 
 load_dotenv()
 
 app = Flask(__name__)
+
+PUBLIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
+
+
+@app.get("/")
+def index():
+    return send_from_directory(PUBLIC_DIR, "index.html")
+
+
+@app.get("/style.css")
+def style():
+    return send_from_directory(PUBLIC_DIR, "style.css")
+
+
+@app.get("/script.js")
+def script():
+    return send_from_directory(PUBLIC_DIR, "script.js")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")

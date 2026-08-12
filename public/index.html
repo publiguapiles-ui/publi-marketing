@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Publi Marketing - Solicitudes</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <h1>Solicitudes</h1>
+
+  <section id="crear">
+    <h2>Crear solicitud</h2>
+    <form id="form-crear">
+      <label>
+        Nombre
+        <input type="text" id="nombre" required />
+      </label>
+      <label>
+        Contacto
+        <input type="text" id="contacto" required placeholder="email o teléfono" />
+      </label>
+      <label>
+        Fecha y hora
+        <input type="datetime-local" id="fecha_hora" required />
+      </label>
+      <button type="submit">Crear solicitud</button>
+    </form>
+    <p id="resultado-crear"></p>
+  </section>
+
+  <hr />
+
+  <section id="consultar">
+    <h2>Consultar estado</h2>
+    <form id="form-consultar">
+      <label>
+        Código de seguimiento
+        <input type="text" id="codigo" required placeholder="SOL-XXXXXX" />
+      </label>
+      <button type="submit">Consultar</button>
+    </form>
+    <p id="resultado-consultar"></p>
+  </section>
+
+  <script src="/script.js"></script>
+</body>
+</html>
