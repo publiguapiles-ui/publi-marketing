@@ -30,11 +30,25 @@
     </dl>
 
     <div class="foto-detalle-acciones">
-      <a href="{{ url_for('fotografia.foto_descargar', fotografia_id=foto.id) }}" class="boton-primario">Descargar original</a>
-      <button type="button" class="boton-secundario" disabled title="Próximamente">Editar</button>
+      <a href="{{ url_for('fotografia.foto_mejorar_confirmar', fotografia_id=foto.id) }}" class="boton-primario">Mejorar fotografía</a>
+      <a href="{{ url_for('fotografia.foto_descargar', fotografia_id=foto.id) }}" class="boton-secundario">Descargar original</a>
       <button type="button" class="boton-secundario" disabled title="Próximamente">Formatos</button>
       <button type="button" class="boton-secundario" disabled title="Próximamente">Logo</button>
     </div>
+
+    {% if derivados %}
+    <h2 class="ps-seccion-titulo">Versiones mejoradas</h2>
+    <ul class="lista-derivados">
+      {% for d in derivados %}
+      <li>
+        <a href="{{ url_for('fotografia.derivado_detalle', derivado_id=d.id) }}">
+          Mejorada v{{ d.version }}
+        </a>
+        <span class="tarjeta-foto-meta">{{ d.estado }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
 
     <p class="perfil-nota"><a href="{{ url_for('fotografia.foto_eliminar', fotografia_id=foto.id) }}" class="enlace-peligro">Eliminar fotografía</a></p>
   </div>

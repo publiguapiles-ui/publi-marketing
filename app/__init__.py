@@ -23,7 +23,12 @@ def create_app(nombre_config=None):
     app = Flask(__name__)
 
     nombre_config = nombre_config or os.environ.get("FLASK_ENV", "development")
-    app.config.from_object(config_por_nombre[nombre_config])
+    config_clase = config_por_nombre[nombre_config]
+    app.config.from_object(config_clase)
+    # Se resuelve aqui (no se deja el valor congelado del atributo de
+    # clase) para que siempre use el DATABASE_URL vigente en el momento
+    # de esta llamada -- ver DevelopmentConfig.resolver_database_uri().
+    app.config["SQLALCHEMY_DATABASE_URI"] = config_clase.resolver_database_uri()
 
     if nombre_config == "production" and not app.config.get("SQLALCHEMY_DATABASE_URI"):
         raise ErrorConfiguracion(

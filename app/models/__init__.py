@@ -6,6 +6,7 @@ from app.models.identidad_marca import IdentidadMarca
 from app.models.logo import Logo, TIPOS_LOGO
 from app.models.proyecto_fotografico import ProyectoFotografico, ESTADOS_PROYECTO
 from app.models.fotografia import Fotografia, ESTADOS_FOTOGRAFIA
+from app.models.fotografia_derivada import FotografiaDerivada, TIPOS_DERIVADO, ESTADOS_DERIVADO
 
 __all__ = [
     "Usuario",
@@ -19,4 +20,7 @@ __all__ = [
     "ESTADOS_PROYECTO",
     "Fotografia",
     "ESTADOS_FOTOGRAFIA",
+    "FotografiaDerivada",
+    "TIPOS_DERIVADO",
+    "ESTADOS_DERIVADO",
 ]

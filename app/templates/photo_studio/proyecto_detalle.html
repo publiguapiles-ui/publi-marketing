@@ -26,7 +26,7 @@
   <h2 class="ps-seccion-titulo">Galería</h2>
   <div id="barra-seleccion" class="barra-seleccion" hidden>
     <span id="texto-seleccion">0 fotografías seleccionadas</span>
-    <button type="button" class="boton-secundario" disabled title="Próximamente">Procesar</button>
+    <button type="button" id="boton-mejorar-seleccion" class="boton-secundario">Mejorar fotografías</button>
     <button type="button" class="boton-secundario" disabled title="Próximamente">Colorizar</button>
     <button type="button" class="boton-secundario" disabled title="Próximamente">Generar formatos</button>
     <button type="button" class="boton-secundario" disabled title="Próximamente">Aplicar logo</button>
@@ -63,6 +63,7 @@
 
 <script>
   window.PS_SUBIR_URL = "{{ url_for('fotografia.subir_foto', proyecto_id=proyecto.id) }}";
+  window.PS_MEJORAR_URL_BASE = "{{ url_for('fotografia.foto_mejorar', fotografia_id=0) }}".replace("/0/", "/__ID__/");
 </script>
 <script src="{{ url_for('static', filename='js/photo_studio.js') }}"></script>
 {% endblock %}

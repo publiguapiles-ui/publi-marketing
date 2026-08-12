@@ -79,11 +79,35 @@ def ruta_fotografia_original(empresa_id, proyecto_id, tipo_mime):
     )
 
 
+def ruta_derivado_mejora(empresa_id, proyecto_id):
+    """Los derivados de mejora automatica siempre se guardan como PNG
+    (sin perdida -- ver services/procesamiento.py), en su propia
+    subcarpeta -- nunca en originales/, y nunca reemplazan un archivo
+    existente (nombre unico por sufijo aleatorio + timestamp).
+    """
+    sufijo = uuid.uuid4().hex[:8]
+    return (
+        f"empresas/{empresa_id}/fotografia/proyectos/{proyecto_id}/derivados/mejoras/"
+        f"{int(time.time())}-{sufijo}.png"
+    )
+
+
 def subir_archivo(bucket, ruta, contenido, tipo_mime):
     cliente = _cliente()
     if cliente is None:
         raise RuntimeError("Supabase Storage no esta configurado")
     cliente.storage.from_(bucket).upload(ruta, contenido, {"content-type": tipo_mime})
+
+
+def descargar_archivo(bucket, ruta):
+    """Descarga los bytes de un archivo (usado por el motor de
+    procesamiento para leer el original -- nunca lo escribe de vuelta
+    en esta misma ruta).
+    """
+    cliente = _cliente()
+    if cliente is None:
+        raise RuntimeError("Supabase Storage no esta configurado")
+    return cliente.storage.from_(bucket).download(ruta)
 
 
 def eliminar_archivo(bucket, ruta):

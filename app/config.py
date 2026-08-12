@@ -55,26 +55,39 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = True
-    # DATABASE_URL es recomendable tambien en desarrollo (por ejemplo
-    # apuntando al mismo Postgres de Supabase), pero si no esta definida
-    # se usa SQLite local como fallback -- una decision explicita y
-    # documentada aqui mismo, exclusiva de este entorno. En produccion
-    # este fallback NO existe (ver ProductionConfig).
-    SQLALCHEMY_DATABASE_URI = _normalizar_url_postgres(
-        os.environ.get("DATABASE_URL")
-    ) or ("sqlite:///" + os.path.join(INSTANCE_DIR, "dev.db"))
     # False en desarrollo porque localhost normalmente no usa HTTPS.
     SESSION_COOKIE_SECURE = False
+
+    @staticmethod
+    def resolver_database_uri():
+        # DATABASE_URL es recomendable tambien en desarrollo (por ejemplo
+        # apuntando al mismo Postgres de Supabase), pero si no esta
+        # definida se usa SQLite local como fallback -- una decision
+        # explicita y documentada aqui mismo, exclusiva de este entorno.
+        # En produccion este fallback NO existe (ver ProductionConfig).
+        #
+        # Se resuelve en una funcion (no en un atributo de clase) para
+        # que se lea DATABASE_URL en el momento en que create_app() se
+        # llama, no en el momento en que este modulo se importa: un
+        # atributo de clase se congela para siempre en el primer import
+        # del proceso, lo que rompe los tests que necesitan una base de
+        # datos temporal distinta por cada llamada a create_app().
+        return _normalizar_url_postgres(os.environ.get("DATABASE_URL")) or (
+            "sqlite:///" + os.path.join(INSTANCE_DIR, "dev.db")
+        )
 
 
 class ProductionConfig(Config):
     DEBUG = False
-    # Sin fallback: si DATABASE_URL falta, esto queda en None a
-    # proposito. create_app() valida esto explicitamente y se niega a
-    # arrancar en vez de caer en SQLite en silencio.
-    SQLALCHEMY_DATABASE_URI = _normalizar_url_postgres(os.environ.get("DATABASE_URL"))
     # La cookie de sesion solo viaja por HTTPS en produccion.
     SESSION_COOKIE_SECURE = True
+
+    @staticmethod
+    def resolver_database_uri():
+        # Sin fallback: si DATABASE_URL falta, esto queda en None a
+        # proposito. create_app() valida esto explicitamente y se niega a
+        # arrancar en vez de caer en SQLite en silencio.
+        return _normalizar_url_postgres(os.environ.get("DATABASE_URL"))
 
 
 config_por_nombre = {

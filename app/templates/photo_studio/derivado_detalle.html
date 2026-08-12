@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block titulo %}Antes/Después · {{ foto.nombre_archivo_original }}{% endblock %}
+{% block contenido %}
+<a href="{{ url_for('fotografia.foto_detalle', fotografia_id=foto.id) }}" class="boton-enlace">← {{ foto.nombre_archivo_original }}</a>
+<h1>Antes / Después</h1>
+
+{% if derivado.estado == "completada" %}
+<div class="comparacion-antes-despues">
+  <div class="comparacion-columna">
+    <span class="comparacion-etiqueta">Original</span>
+    {% if url_original %}<img src="{{ url_original }}" alt="Original" />{% endif %}
+  </div>
+  <div class="comparacion-columna">
+    <span class="comparacion-etiqueta">Mejorada (v{{ derivado.version }})</span>
+    {% if url_derivado %}<img src="{{ url_derivado }}" alt="Mejorada" />{% endif %}
+  </div>
+</div>
+
+<div class="ps-metadata-caja">
+  <h2>Información del procesamiento</h2>
+  <dl class="perfil-datos">
+    <dt>Tipo</dt>
+    <dd>Corrección automática</dd>
+    <dt>Versión</dt>
+    <dd>{{ derivado.version }}</dd>
+    <dt>Fecha</dt>
+    <dd>{{ derivado.creado_en.strftime("%Y-%m-%d %H:%M") }}</dd>
+    <dt>Procesamiento</dt>
+    <dd>{{ correcciones | join(", ") | capitalize }}</dd>
+    <dt>Protección facial</dt>
+    <dd>{{ "Sí" if derivado.rostros_protegidos else "No" }}{% if derivado.rostros_detectados %} ({{ derivado.rostros_detectados }} rostro{{ "s" if derivado.rostros_detectados != 1 else "" }}){% endif %}</dd>
+    <dt>Categoría</dt>
+    <dd>{{ derivado.categoria_detectada }} (confianza {{ (derivado.confianza_categoria * 100) | round | int }}%)</dd>
+    <dt>Duración del procesamiento</dt>
+    <dd>{{ derivado.duracion_segundos }} s</dd>
+  </dl>
+</div>
+
+<a href="{{ url_for('fotografia.foto_descargar', fotografia_id=foto.id) }}" class="boton-secundario">Descargar original</a>
+
+{% elif derivado.estado == "error" %}
+<div class="login-error" role="alert">Error al procesar: {{ derivado.error_mensaje }}</div>
+<button type="button" id="boton-reintentar" class="boton-primario">Intentar nuevamente</button>
+<script>
+  document.getElementById("boton-reintentar").addEventListener("click", function () {
+    this.disabled = true;
+    this.textContent = "Procesando...";
+    fetch("{{ url_for('fotografia.foto_mejorar', fotografia_id=foto.id) }}", { method: "POST" })
+      .then((r) => r.json())
+      .then((datos) => {
+        if (datos.ok) {
+          window.location = datos.url_resultado;
+        } else {
+          this.disabled = false;
+          this.textContent = "Intentar nuevamente";
+          alert(datos.error || "No se pudo procesar la fotografía.");
+        }
+      });
+  });
+</script>
+{% else %}
+<p>Procesando...</p>
+{% endif %}
+{% endblock %}

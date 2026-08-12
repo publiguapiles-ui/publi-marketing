@@ -37,6 +37,7 @@ from app.services.storage import (
     subir_archivo,
     url_firmada,
 )
+from app.services.derivados import crear_mejora_automatica, obtener_derivado, obtener_derivados_fotografia
 
 fotografia_bp = Blueprint("fotografia", __name__, url_prefix="/photo-studio")
 
@@ -158,8 +159,74 @@ def foto_detalle(fotografia_id):
     empresa, _rol, foto = _fotografia_de_empresa_activa(fotografia_id)
     proyecto = obtener_proyecto(empresa.id, foto.proyecto_id)
     url = url_firmada(BUCKET_FOTOGRAFIAS, foto.ruta_storage)
+    derivados = obtener_derivados_fotografia(foto.id)
     return render_template(
-        "photo_studio/foto_detalle.html", empresa_activa=empresa, foto=foto, proyecto=proyecto, url=url
+        "photo_studio/foto_detalle.html",
+        empresa_activa=empresa,
+        foto=foto,
+        proyecto=proyecto,
+        url=url,
+        derivados=derivados,
+    )
+
+
+@fotografia_bp.get("/fotos/<int:fotografia_id>/mejorar")
+@login_required
+def foto_mejorar_confirmar(fotografia_id):
+    empresa, _rol, foto = _fotografia_de_empresa_activa(fotografia_id)
+    return render_template("photo_studio/foto_mejorar.html", empresa_activa=empresa, foto=foto)
+
+
+@fotografia_bp.post("/fotos/<int:fotografia_id>/mejorar")
+@login_required
+def foto_mejorar(fotografia_id):
+    empresa, _rol, foto = _fotografia_de_empresa_activa(fotografia_id)
+    usuario = obtener_usuario_actual()
+
+    if not storage_configurado():
+        return jsonify({"ok": False, "error": "El almacenamiento no está disponible en este momento."}), 503
+
+    derivado = crear_mejora_automatica(empresa.id, foto.proyecto_id, foto, usuario["id"])
+
+    if derivado.estado == "error":
+        return jsonify({"ok": False, "error": derivado.error_mensaje or "No se pudo procesar la fotografía."}), 502
+
+    return jsonify(
+        {
+            "ok": True,
+            "derivado_id": derivado.id,
+            "estado": derivado.estado,
+            "url_resultado": url_for("fotografia.derivado_detalle", derivado_id=derivado.id),
+        }
+    ), 201
+
+
+@fotografia_bp.get("/derivados/<int:derivado_id>")
+@login_required
+def derivado_detalle(derivado_id):
+    empresa, _rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+    derivado = obtener_derivado(empresa.id, derivado_id)
+    if derivado is None:
+        abort(404)
+
+    foto = obtener_fotografia(empresa.id, derivado.fotografia_id)
+    proyecto = obtener_proyecto(empresa.id, foto.proyecto_id)
+    url_original = url_firmada(BUCKET_FOTOGRAFIAS, foto.ruta_storage)
+    url_derivado = url_firmada(BUCKET_FOTOGRAFIAS, derivado.ruta_storage) if derivado.ruta_storage else None
+
+    correcciones = derivado.correcciones_aplicadas.split(",") if derivado.correcciones_aplicadas else []
+
+    return render_template(
+        "photo_studio/derivado_detalle.html",
+        empresa_activa=empresa,
+        foto=foto,
+        proyecto=proyecto,
+        derivado=derivado,
+        url_original=url_original,
+        url_derivado=url_derivado,
+        correcciones=correcciones,
     )
 
 

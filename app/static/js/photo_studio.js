@@ -107,4 +107,51 @@
     barraSeleccion.hidden = false;
     textoSeleccion.textContent = `${marcadas.length} fotografía${marcadas.length === 1 ? "" : "s"} seleccionada${marcadas.length === 1 ? "" : "s"}`;
   }
+
+  // --- Mejorar por lote ---
+  const botonMejorarSeleccion = document.getElementById("boton-mejorar-seleccion");
+
+  if (botonMejorarSeleccion && window.PS_MEJORAR_URL_BASE) {
+    botonMejorarSeleccion.addEventListener("click", async () => {
+      const ids = Array.from(document.querySelectorAll(".check-foto:checked")).map((c) => c.value);
+      if (!ids.length) return;
+
+      botonMejorarSeleccion.disabled = true;
+      progreso.hidden = false;
+      progresoResumen.textContent = "";
+      const total = ids.length;
+      let completados = 0;
+      const fallidos = [];
+
+      progresoTexto.textContent = `Mejorando fotografías... 0 de ${total}`;
+      progresoBarra.style.width = "0%";
+
+      for (const id of ids) {
+        const url = window.PS_MEJORAR_URL_BASE.replace("__ID__", id);
+        try {
+          const resp = await fetch(url, { method: "POST" });
+          const datos = await resp.json();
+          if (!datos.ok) fallidos.push({ id, error: datos.error || "Error desconocido." });
+        } catch (err) {
+          fallidos.push({ id, error: "Error de conexión." });
+        }
+        completados += 1;
+        progresoTexto.textContent = `Mejorando fotografías... ${completados} de ${total}`;
+        progresoBarra.style.width = `${Math.round((completados / total) * 100)}%`;
+      }
+
+      if (fallidos.length === 0) {
+        progresoTexto.textContent = "Listo";
+        progresoResumen.textContent = `${total} fotografía${total === 1 ? "" : "s"} mejorada${total === 1 ? "" : "s"} correctamente.`;
+      } else {
+        const exitosas = total - fallidos.length;
+        progresoTexto.textContent = "Listo con errores";
+        progresoResumen.textContent =
+          `${exitosas} fotografía${exitosas === 1 ? "" : "s"} mejorada${exitosas === 1 ? "" : "s"}. ` +
+          `${fallidos.length} no se ${fallidos.length === 1 ? "pudo" : "pudieron"} procesar.`;
+      }
+
+      botonMejorarSeleccion.disabled = false;
+    });
+  }
 })();

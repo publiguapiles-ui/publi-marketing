@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titulo %}Mejorar fotografía · Photo Studio{% endblock %}
+{% block contenido %}
+<h1>¿Quieres crear una versión mejorada?</h1>
+<p>El original permanecerá intacto. Se generará una fotografía nueva con corrección automática de exposición, color, contraste y nitidez.</p>
+<p class="perfil-nota"><strong>{{ foto.nombre_archivo_original }}</strong></p>
+
+<div id="zona-confirmar">
+  <button type="button" id="boton-mejorar" class="boton-primario">Mejorar</button>
+  <a href="{{ url_for('fotografia.foto_detalle', fotografia_id=foto.id) }}" class="boton-secundario">Cancelar</a>
+</div>
+
+<div id="zona-procesando" hidden>
+  <p>Procesando fotografía...</p>
+</div>
+
+<div id="zona-resultado" hidden>
+  <p id="texto-resultado"></p>
+  <a id="enlace-resultado" href="#" class="boton-primario" hidden>Ver antes/después</a>
+</div>
+
+<script>
+  window.PS_MEJORAR_URL = "{{ url_for('fotografia.foto_mejorar', fotografia_id=foto.id) }}";
+</script>
+<script src="{{ url_for('static', filename='js/photo_studio_mejorar.js') }}"></script>
+{% endblock %}
