@@ -16,6 +16,10 @@ APLICACIONES_LOGO = ["sin_logo", "logo", "marca_agua"]
 POSICIONES_LOGO = ["superior_izquierda", "superior_derecha", "inferior_izquierda", "inferior_derecha", "centro"]
 POSICION_LOGO_PREDETERMINADA = "inferior_derecha"
 
+# Paso 9: modo de encuadre.
+MODOS_RECORTE = ["auto", "manual"]
+MODO_RECORTE_PREDETERMINADO = "auto"
+
 
 class FotografiaDerivada(db.Model):
     """Version derivada de una fotografia original (nunca la reemplaza).
@@ -63,7 +67,20 @@ class FotografiaDerivada(db.Model):
     opacidad_logo = db.Column(db.Float)
     ancho_px = db.Column(db.Integer)
     alto_px = db.Column(db.Integer)
-    advertencia = db.Column(db.String(255))  # ej. "no se encontro encuadre seguro", logo de baja resolucion
+    advertencia = db.Column(db.String(255))  # ej. encuadre imperfecto, logo de baja resolucion
+
+    # Paso 9: encuadre inteligente/manual. Las coordenadas crop_* estan
+    # en pixeles de la imagen ORIGEN usada (original o mejora), no del
+    # resultado final -- describen de donde se tomo el recorte, util
+    # para depurar o para un futuro "restablecer a este encuadre".
+    crop_mode = db.Column(db.String(10))  # uno de MODOS_RECORTE
+    focus_x = db.Column(db.Float)  # 0-1, normalizado; None si no se uso foco manual
+    focus_y = db.Column(db.Float)
+    crop_x = db.Column(db.Integer)
+    crop_y = db.Column(db.Integer)
+    crop_width = db.Column(db.Integer)
+    crop_height = db.Column(db.Integer)
+    algoritmo_recorte = db.Column(db.String(30))  # ej. "rostros", "saliencia", "manual"
 
     creado_por = db.Column(db.String(36), db.ForeignKey("usuarios.id"), nullable=True)
 

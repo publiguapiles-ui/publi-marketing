@@ -11,14 +11,14 @@ from PIL import Image
 
 from app.services.formatos import (
     FORMATOS_FIJOS,
-    MENSAJE_SIN_ENCUADRE_SEGURO,
+    MENSAJE_ENCUADRE_IMPERFECTO,
     advertencia_resolucion_logo,
     aplicar_logo,
+    aplicar_recorte,
+    calcular_ventana_formato,
     generar_formato,
-    recorte_inteligente,
     tiene_transparencia,
 )
-from app.services.procesamiento import detectar_rostros
 
 
 def _png_bytes(imagen):
@@ -29,37 +29,6 @@ def _png_bytes(imagen):
 
 def _imagen_solida(ancho, alto, rgb):
     return Image.new("RGB", (ancho, alto), rgb)
-
-
-def _rostro_sintetico(ancho=400, alto=500):
-    """Identico al helper de test_procesamiento.py: gradientes, no
-    vectores planos -- es lo unico que dispara una deteccion real del
-    Haar Cascade sin usar la foto de una persona real.
-    """
-    yy, xx = np.mgrid[0:alto, 0:ancho]
-    cx, cy = ancho / 2, alto / 2
-
-    dist = ((xx - cx) / 140) ** 2 + ((yy - cy) / 180) ** 2
-    base = np.clip(235 - dist * 90, 120, 235)
-
-    for signo in (-1, 1):
-        ex, ey = cx + signo * 55, cy - 20
-        d = ((xx - ex) / 22) ** 2 + ((yy - ey) / 14) ** 2
-        base = np.where(d < 1, base - 140 * np.exp(-d * 2), base)
-        d_ceja = ((xx - ex) / 28) ** 2 + ((yy - (ey - 25)) / 7) ** 2
-        base = np.where(d_ceja < 1, base - 90, base)
-
-    d_nariz = ((xx - cx) / 10) ** 2 + ((yy - cy + 10) / 55) ** 2
-    base = np.where((d_nariz < 1) & (xx > cx), base - 15, base)
-
-    d_boca = ((xx - cx) / 38) ** 2 + ((yy - cy - 95) / 12) ** 2
-    base = np.where(d_boca < 1, base - 60, base)
-
-    gris = np.clip(base, 0, 255).astype(np.uint8)
-    rgb = np.stack([gris, gris * 0.85, gris * 0.75], axis=-1).astype(np.uint8)
-    from PIL import ImageFilter
-
-    return Image.fromarray(rgb, mode="RGB").filter(ImageFilter.GaussianBlur(1.2))
 
 
 def _logo_rgba(ancho, alto, rgb_opaco, con_zona_transparente=False):
@@ -110,52 +79,49 @@ def test_formato_horizontal_preserva_proporcion_original():
     assert max(resultado.size) <= 1920
 
 
-# --- Recorte inteligente: nunca deforma ---------------------------------------
+# --- Recorte: nunca deforma -----------------------------------------------------
+# El motor de recorte por puntuacion de candidatos (Paso 9) se prueba a
+# fondo en tests/test_encuadre.py; aqui solo se verifica que la
+# composicion (formatos + logo) siga funcionando sobre el nuevo motor.
 
 def test_recorte_nunca_deforma_produce_tamano_exacto():
+    calculo = calcular_ventana_formato(2000, 500, "formato_cuadrado", rostros=[])
     imagen = _imagen_solida(2000, 500, (10, 20, 30))
-    recorte, advertencia = recorte_inteligente(imagen, 1080, 1080, rostros=[])
-    assert advertencia is None
+    recorte, _caja = aplicar_recorte(imagen, calculo["ventana"], calculo["ancho_objetivo"], calculo["alto_objetivo"])
+    assert calculo["advertencia"] is None
     assert recorte.size == (1080, 1080)
 
 
-# --- Recorte inteligente + rostros: la prueba mas importante de este paso -----
-
-def test_recorte_evita_cortar_rostro_cuando_es_posible():
-    """Si existe un encuadre seguro, el rostro debe seguir siendo
-    detectable en el resultado recortado -- se usa el propio detector
-    real (no una suposicion) como verificacion.
+def test_generar_formato_siempre_produce_un_archivo():
+    """Paso 9: ya no se rechaza silenciosamente. Un rostro que cubre casi
+    todo el ancho de una imagen muy ancha hace que CUALQUIER posicion de
+    la ventana de recorte lo toque sin poder contenerlo completo -- no
+    hay forma de evitarlo, asi que se genera igual el archivo (el mejor
+    encuadre posible) con la advertencia explicita en vez de fallar.
     """
-    imagen = _rostro_sintetico(800, 600)
-    rostros = detectar_rostros(imagen)
-    assert len(rostros) >= 1, "El detector no encontro el rostro sintetico."
-
-    recorte, advertencia = recorte_inteligente(imagen, 1080, 1350, rostros)
-    assert advertencia is None
-    assert recorte is not None
-
-    rostros_en_recorte = detectar_rostros(recorte)
-    assert len(rostros_en_recorte) >= 1, "El rostro desaparecio del recorte: la proteccion de encuadre fallo."
-
-
-def test_recorte_advierte_cuando_no_hay_encuadre_seguro():
-    """Dos rostros separados por casi todo el ancho de una imagen muy
-    ancha: ningun recorte cuadrado de 1080px puede incluir a ambos.
-    """
-    imagen = _imagen_solida(3000, 400, (50, 50, 50))
-    rostros = [(0, 150, 100, 100), (2900, 150, 100, 100)]
-
-    recorte, advertencia = recorte_inteligente(imagen, 1080, 1080, rostros)
-    assert recorte is None
-    assert advertencia == MENSAJE_SIN_ENCUADRE_SEGURO
-
-
-def test_generar_formato_no_produce_archivo_sin_encuadre_seguro():
     base = _png_bytes(_imagen_solida(3000, 400, (50, 50, 50)))
-    rostros = [(0, 150, 100, 100), (2900, 150, 100, 100)]
+    rostros = [(200, 50, 2600, 300)]  # cubre casi todo el ancho: ninguna posicion evita tocarlo
     bytes_resultado, metadata = generar_formato(base, "formato_cuadrado", rostros=rostros)
-    assert bytes_resultado is None
-    assert metadata["advertencia"] == MENSAJE_SIN_ENCUADRE_SEGURO
+    assert bytes_resultado is not None
+    resultado = Image.open(io.BytesIO(bytes_resultado))
+    assert resultado.size == (1080, 1080)
+    assert metadata["advertencia"] == MENSAJE_ENCUADRE_IMPERFECTO
+
+
+def test_generar_formato_prefiere_excluir_por_completo_a_cortar_a_medias():
+    """Decision de diseno deliberada: entre un candidato que corta a un
+    rostro por la mitad y uno que simplemente lo deja fuera del
+    encuadre, se prefiere dejarlo fuera -- un rostro cortado se ve como
+    un error obvio; uno ausente se ve como un encuadre distinto, no
+    roto. Aqui el rostro es mas ancho que la ventana pero esta acotado
+    (no cubre casi toda la imagen), asi que SI existe una posicion que
+    lo evita del todo.
+    """
+    base = _png_bytes(_imagen_solida(3000, 400, (50, 50, 50)))
+    rostros = [(1100, 50, 800, 300)]
+    bytes_resultado, metadata = generar_formato(base, "formato_cuadrado", rostros=rostros)
+    assert bytes_resultado is not None
+    assert metadata["advertencia"] is None
 
 
 # --- Logo: transparencia, proporcion, posicion ---------------------------------

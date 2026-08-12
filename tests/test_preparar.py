@@ -296,3 +296,80 @@ def test_lote_continua_aunque_una_fotografia_falle(client, usuario_a_con_empresa
         assert len(derivados_malos) == 1
         assert derivados_malos[0].estado == "error"
         assert derivados_malos[0].error_mensaje
+
+
+# --- Encuadre manual/automatico (Paso 9) -----------------------------------------
+
+def test_encuadre_manual_guarda_metadata_y_no_toca_el_original(client, usuario_a_con_empresa, monkeypatch):
+    empresa_id = usuario_a_con_empresa["empresa_id"]
+    almacen, _proyecto, foto, _logo_id = _crear_proyecto_foto_y_logo(client, monkeypatch, empresa_id)
+    hash_antes = hashlib.sha256(almacen[foto.ruta_storage]).hexdigest()
+
+    resp = client.post(
+        f"/photo-studio/fotos/{foto.id}/preparar",
+        json={
+            "aplicacion": "sin_logo",
+            "formatos": ["formato_cuadrado"],
+            "crop_mode": "manual",
+            "focus_x": 0.75,
+            "focus_y": 0.25,
+            "zoom": 1.5,
+        },
+    )
+    assert resp.status_code == 201
+
+    hash_despues = hashlib.sha256(almacen[foto.ruta_storage]).hexdigest()
+    assert hash_antes == hash_despues
+
+    from app.services.derivados import obtener_derivados_fotografia
+
+    with client.application.app_context():
+        derivado = obtener_derivados_fotografia(foto.id)[0]
+        assert derivado.crop_mode == "manual"
+        assert derivado.focus_x == 0.75
+        assert derivado.focus_y == 0.25
+        assert derivado.algoritmo_recorte == "manual"
+        assert derivado.crop_width is not None and derivado.crop_height is not None
+
+
+def test_encuadre_manual_requiere_punto_de_enfoque(client, usuario_a_con_empresa, monkeypatch):
+    empresa_id = usuario_a_con_empresa["empresa_id"]
+    _almacen, _proyecto, foto, _logo_id = _crear_proyecto_foto_y_logo(client, monkeypatch, empresa_id)
+
+    resp = client.post(
+        f"/photo-studio/fotos/{foto.id}/preparar",
+        json={"aplicacion": "sin_logo", "formatos": ["formato_cuadrado"], "crop_mode": "manual"},
+    )
+    assert resp.status_code == 400
+
+
+def test_encuadre_calcular_devuelve_ventana_sin_persistir(client, usuario_a_con_empresa, monkeypatch):
+    empresa_id = usuario_a_con_empresa["empresa_id"]
+    _almacen, _proyecto, foto, _logo_id = _crear_proyecto_foto_y_logo(client, monkeypatch, empresa_id)
+
+    resp = client.post(
+        f"/photo-studio/fotos/{foto.id}/encuadre/calcular",
+        json={"crop_mode": "manual", "focus_x": 0.2, "focus_y": 0.8, "formato": "formato_vertical"},
+    )
+    assert resp.status_code == 200
+    datos = resp.get_json()
+    assert datos["ok"] is True
+    assert datos["crop_x0"] <= 0.2 <= datos["crop_x1"]
+    assert datos["crop_y0"] <= 0.8 <= datos["crop_y1"]
+
+    from app.services.derivados import obtener_derivados_fotografia
+
+    with client.application.app_context():
+        assert obtener_derivados_fotografia(foto.id) == []
+
+
+def test_encuadre_calcular_de_fotografia_de_otra_empresa_es_404(client, usuario_a_con_empresa, usuario_b_con_empresa, monkeypatch):
+    iniciar_sesion_de_prueba(client, usuario_a_con_empresa["usuario_id"], "a@example.com")
+    _almacen, _proyecto, foto, _logo_id = _crear_proyecto_foto_y_logo(client, monkeypatch, usuario_a_con_empresa["empresa_id"])
+
+    iniciar_sesion_de_prueba(client, usuario_b_con_empresa["usuario_id"], "b@example.com")
+    resp = client.post(
+        f"/photo-studio/fotos/{foto.id}/encuadre/calcular",
+        json={"crop_mode": "auto", "formato": "formato_cuadrado"},
+    )
+    assert resp.status_code == 404

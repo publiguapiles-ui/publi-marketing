@@ -8,10 +8,40 @@
 <div class="ps-preparar">
   <section class="ps-preparar-columna">
     <h2 class="ps-seccion-titulo">Fotografía</h2>
-    <div class="ps-preparar-preview">
+    <div class="ps-preparar-preview" id="preview-contenedor">
       <img id="preview-imagen" src="{{ url_foto }}" alt="{{ foto.nombre_archivo_original }}" />
-      <p id="preview-texto" class="tarjeta-foto-meta">Vista previa en vivo</p>
+      <div id="preview-overlay" class="ps-encuadre-overlay" hidden></div>
+      <div id="preview-foco" class="ps-encuadre-foco" hidden></div>
     </div>
+    <p id="preview-texto" class="tarjeta-foto-meta">Vista previa en vivo</p>
+
+    <h2 class="ps-seccion-titulo">Ajustar encuadre</h2>
+    <p class="perfil-nota">Toca o haz clic sobre la fotografía para fijar el punto de enfoque.</p>
+    <fieldset class="campo-radios">
+      <legend>Modo</legend>
+      <label class="opcion-radio"><input type="radio" name="crop_mode" value="auto" checked /> Auto</label>
+      <label class="opcion-radio"><input type="radio" name="crop_mode" value="manual" /> Manual</label>
+    </fieldset>
+    <label>
+      Formato para vista previa del encuadre
+      <select id="campo-formato-encuadre">
+        {% for formato in formatos %}
+        <option value="{{ formato }}">
+          {% if formato == "formato_cuadrado" %}Cuadrado (1080 × 1080)
+          {% elif formato == "formato_vertical" %}Vertical (1080 × 1350)
+          {% elif formato == "formato_historia" %}Historia (1080 × 1920)
+          {% else %}Horizontal (proporción original)
+          {% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label id="campo-zoom-contenedor" hidden>
+      Zoom: <span id="valor-zoom">1.0x</span>
+      <input type="range" id="campo-zoom" min="100" max="300" value="100" />
+    </label>
+    <button type="button" id="boton-restablecer-encuadre" class="boton-secundario">Restablecer encuadre</button>
+    <div id="advertencia-encuadre" class="login-aviso" hidden></div>
   </section>
 
   <section class="ps-preparar-columna">
@@ -82,6 +112,7 @@
 <script>
   window.PS_PREPARAR_URL = "{{ url_for('fotografia.foto_preparar', fotografia_id=foto.id) }}";
   window.PS_PREPARAR_VISTA_PREVIA_URL = "{{ url_for('fotografia.foto_preparar_vista_previa', fotografia_id=foto.id) }}";
+  window.PS_ENCUADRE_CALCULAR_URL = "{{ url_for('fotografia.foto_encuadre_calcular', fotografia_id=foto.id) }}";
   window.PS_FOTO_URL_ORIGINAL = "{{ url_foto }}";
 </script>
 <script src="{{ url_for('static', filename='js/photo_studio_preparar.js') }}"></script>

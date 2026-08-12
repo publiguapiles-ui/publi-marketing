@@ -18,7 +18,7 @@ from flask import Blueprint, Response, abort, jsonify, redirect, render_template
 from app.core.auth import obtener_usuario_actual
 from app.core.decorators import login_required
 from app.core.empresas import obtener_empresa_activa
-from app.models import APLICACIONES_LOGO, POSICIONES_LOGO, POSICION_LOGO_PREDETERMINADA
+from app.models import APLICACIONES_LOGO, POSICIONES_LOGO, POSICION_LOGO_PREDETERMINADA, MODOS_RECORTE
 from app.services.fotografia import (
     contar_fotografias,
     crear_fotografia,
@@ -29,7 +29,7 @@ from app.services.fotografia import (
     obtener_proyecto,
     obtener_proyectos_empresa,
 )
-from app.services.formatos import TIPOS_FORMATO, generar_formato
+from app.services.formatos import TIPOS_FORMATO, calcular_saliencia, calcular_ventana_formato, generar_formato
 from app.services.marca import obtener_logo, obtener_logo_marca_agua, obtener_logo_principal, obtener_logos_empresa
 from app.services.storage import (
     BUCKET_FOTOGRAFIAS,
@@ -256,7 +256,40 @@ def _parametros_preparacion(empresa, datos):
     if aplicacion != "sin_logo" and logo is None:
         return None, "Selecciona un logo para aplicar."
 
-    return {"logo": logo, "aplicacion": aplicacion, "posicion": posicion, "opacidad": opacidad}, None
+    modo = datos.get("crop_mode") or "auto"
+    if modo not in MODOS_RECORTE:
+        return None, "Modo de encuadre inválido."
+
+    focus_x = datos.get("focus_x")
+    focus_y = datos.get("focus_y")
+    if focus_x is not None and focus_y is not None:
+        try:
+            focus_x = max(0.0, min(1.0, float(focus_x)))
+            focus_y = max(0.0, min(1.0, float(focus_y)))
+        except (TypeError, ValueError):
+            return None, "Punto de enfoque inválido."
+    else:
+        focus_x = focus_y = None
+
+    if modo == "manual" and focus_x is None:
+        return None, "El modo manual requiere un punto de enfoque."
+
+    try:
+        zoom = float(datos.get("zoom", 1.0))
+    except (TypeError, ValueError):
+        zoom = 1.0
+    zoom = max(1.0, min(3.0, zoom))
+
+    return {
+        "logo": logo,
+        "aplicacion": aplicacion,
+        "posicion": posicion,
+        "opacidad": opacidad,
+        "modo": modo,
+        "focus_x": focus_x,
+        "focus_y": focus_y,
+        "zoom": zoom,
+    }, None
 
 
 @fotografia_bp.get("/fotos/<int:fotografia_id>/preparar")
@@ -311,6 +344,10 @@ def foto_preparar(fotografia_id):
             aplicacion=parametros["aplicacion"],
             posicion=parametros["posicion"],
             opacidad=parametros["opacidad"],
+            modo=parametros["modo"],
+            focus_x=parametros["focus_x"],
+            focus_y=parametros["focus_y"],
+            zoom=parametros["zoom"],
         )
         resultados.append(
             {
@@ -371,11 +408,82 @@ def foto_preparar_vista_previa(fotografia_id):
         aplicacion=parametros["aplicacion"],
         posicion=parametros["posicion"],
         opacidad=parametros["opacidad"],
+        modo=parametros["modo"],
+        focus_x=parametros["focus_x"],
+        focus_y=parametros["focus_y"],
+        zoom=parametros["zoom"],
     )
     if bytes_resultado is None:
         return jsonify({"ok": False, "error": metadata.get("advertencia") or "No se pudo generar la vista previa."}), 422
 
     return Response(bytes_resultado, mimetype="image/jpeg")
+
+
+@fotografia_bp.post("/fotos/<int:fotografia_id>/encuadre/calcular")
+@login_required
+def foto_encuadre_calcular(fotografia_id):
+    """Calculo LIVIANO del area de recorte (Paso 9, punto 8): solo
+    devuelve las coordenadas normalizadas de la ventana, sin componer
+    ni codificar ninguna imagen -- para dibujar el overlay mientras el
+    usuario arrastra el punto de enfoque o mueve el zoom, sin pagar el
+    costo de regenerar el JPEG en cada movimiento.
+    """
+    empresa, _rol, foto = _fotografia_de_empresa_activa(fotografia_id)
+
+    if not storage_configurado():
+        abort(503)
+
+    datos = request.get_json(silent=True) or {}
+    modo = datos.get("crop_mode") or "auto"
+    if modo not in MODOS_RECORTE:
+        return jsonify({"ok": False, "error": "Modo de encuadre inválido."}), 400
+
+    tipo_formato = datos.get("formato")
+    if tipo_formato not in TIPOS_FORMATO:
+        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+
+    focus_x = datos.get("focus_x")
+    focus_y = datos.get("focus_y")
+    try:
+        focus_x = max(0.0, min(1.0, float(focus_x))) if focus_x is not None else None
+        focus_y = max(0.0, min(1.0, float(focus_y))) if focus_y is not None else None
+        zoom = max(1.0, min(3.0, float(datos.get("zoom", 1.0))))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Parámetros de encuadre inválidos."}), 400
+
+    bucket_base, ruta_base = mejor_base_disponible(foto)
+    try:
+        bytes_base = descargar_archivo(bucket_base, ruta_base)
+    except Exception:
+        return jsonify({"ok": False, "error": "No se pudo cargar la fotografía."}), 502
+
+    imagen_base = cargar_imagen(bytes_base)
+    ancho_base, alto_base = imagen_base.size
+    rostros = detectar_rostros(imagen_base)
+
+    saliencia_xy = None
+    if modo == "auto" and not rostros:
+        saliencia_xy = calcular_saliencia(imagen_base)
+
+    calculo = calcular_ventana_formato(
+        ancho_base, alto_base, tipo_formato, rostros,
+        modo=modo, focus_x=focus_x, focus_y=focus_y, zoom=zoom, saliencia_xy=saliencia_xy,
+    )
+    x0, y0, x1, y1 = calculo["ventana"]
+
+    return jsonify(
+        {
+            "ok": True,
+            "crop_x0": x0,
+            "crop_y0": y0,
+            "crop_x1": x1,
+            "crop_y1": y1,
+            "focus_x": calculo["focus_x"],
+            "focus_y": calculo["focus_y"],
+            "algoritmo": calculo["algoritmo"],
+            "advertencia": calculo["advertencia"],
+        }
+    )
 
 
 @fotografia_bp.get("/derivados/<int:derivado_id>")

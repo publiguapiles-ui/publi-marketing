@@ -42,6 +42,12 @@
     <dd>{{ derivado.ancho_px }} × {{ derivado.alto_px }} px</dd>
     <dt>Rostros detectados</dt>
     <dd>{{ derivado.rostros_detectados or 0 }}</dd>
+    <dt>Encuadre</dt>
+    <dd>{{ "Manual" if derivado.crop_mode == "manual" else "Automático" }} ({{ derivado.algoritmo_recorte or "-" }})</dd>
+    {% if derivado.focus_x is not none %}
+    <dt>Punto de enfoque</dt>
+    <dd>{{ (derivado.focus_x * 100) | round | int }}%, {{ (derivado.focus_y * 100) | round | int }}%</dd>
+    {% endif %}
     <dt>Logo</dt>
     <dd>{{ logo_usado.nombre_archivo_original if logo_usado else "Sin logo" }}</dd>
     {% if derivado.aplicacion_logo and derivado.aplicacion_logo != "sin_logo" %}

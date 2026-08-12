@@ -144,10 +144,10 @@ def crear_mejora_automatica(empresa_id, proyecto_id, fotografia, usuario_id):
     return encolar(_procesar)
 
 
-def crear_formato(empresa_id, proyecto_id, fotografia, usuario_id, tipo_formato, logo=None, aplicacion="sin_logo", posicion="inferior_derecha", opacidad=0.8):
+def crear_formato(empresa_id, proyecto_id, fotografia, usuario_id, tipo_formato, logo=None, aplicacion="sin_logo", posicion="inferior_derecha", opacidad=0.8, modo="auto", focus_x=None, focus_y=None, zoom=1.0):
     """Crea (sincronamente, via services/tareas.py) un formato para
     redes sociales (cuadrado/vertical/historia/horizontal), con logo o
-    marca de agua opcional.
+    marca de agua opcional y encuadre automatico o manual (Paso 9).
 
     `logo`, si se pasa, DEBE ser un objeto Logo ya validado por el
     llamador (obtenido con empresa_id, ver app/services/marca.py) --
@@ -177,6 +177,7 @@ def crear_formato(empresa_id, proyecto_id, fotografia, usuario_id, tipo_formato,
         aplicacion_logo=aplicacion,
         posicion_logo=posicion if aplicacion != "sin_logo" else None,
         opacidad_logo=opacidad if aplicacion != "sin_logo" else None,
+        crop_mode=modo,
         creado_por=usuario_id,
     )
     db.session.add(derivado)
@@ -207,6 +208,10 @@ def crear_formato(empresa_id, proyecto_id, fotografia, usuario_id, tipo_formato,
                 aplicacion=aplicacion,
                 posicion=posicion,
                 opacidad=opacidad,
+                modo=modo,
+                focus_x=focus_x,
+                focus_y=focus_y,
+                zoom=zoom,
             )
 
             # Verificacion de integridad del original (misma regla del
@@ -237,6 +242,13 @@ def crear_formato(empresa_id, proyecto_id, fotografia, usuario_id, tipo_formato,
             derivado.alto_px = metadata["alto_px"]
             derivado.advertencia = metadata.get("advertencia")
             derivado.duracion_segundos = metadata["duracion_segundos"]
+            derivado.focus_x = metadata.get("focus_x")
+            derivado.focus_y = metadata.get("focus_y")
+            derivado.crop_x = metadata.get("crop_x")
+            derivado.crop_y = metadata.get("crop_y")
+            derivado.crop_width = metadata.get("crop_width")
+            derivado.crop_height = metadata.get("crop_height")
+            derivado.algoritmo_recorte = metadata.get("algoritmo_recorte")
             derivado.estado = "completada"
         except Exception as exc:
             derivado.estado = "error"
