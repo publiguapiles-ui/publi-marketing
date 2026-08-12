@@ -82,5 +82,52 @@ def crear_solicitud():
     return jsonify(result.data[0]), 201
 
 
+def buscar_solicitud(codigo):
+    result = (
+        supabase_admin.table("solicitudes")
+        .select("*")
+        .eq("codigo_seguimiento", codigo)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+@app.get("/solicitudes/<codigo>")
+def obtener_solicitud(codigo):
+    if supabase_admin is None:
+        return jsonify({"error": "Supabase no está configurado"}), 500
+
+    try:
+        solicitud = buscar_solicitud(codigo)
+    except Exception as exc:
+        return jsonify({"error": f"No se pudo consultar la solicitud: {exc}"}), 502
+
+    if solicitud is None:
+        return jsonify({"error": f"No existe ninguna solicitud con el código '{codigo}'"}), 404
+
+    return jsonify(solicitud), 200
+
+
+@app.patch("/solicitudes/<codigo>/confirmar")
+def confirmar_solicitud(codigo):
+    if supabase_admin is None:
+        return jsonify({"error": "Supabase no está configurado"}), 500
+
+    try:
+        if buscar_solicitud(codigo) is None:
+            return jsonify({"error": f"No existe ninguna solicitud con el código '{codigo}'"}), 404
+
+        result = (
+            supabase_admin.table("solicitudes")
+            .update({"estado": "confirmada"})
+            .eq("codigo_seguimiento", codigo)
+            .execute()
+        )
+    except Exception as exc:
+        return jsonify({"error": f"No se pudo confirmar la solicitud: {exc}"}), 502
+
+    return jsonify(result.data[0]), 200
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
