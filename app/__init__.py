@@ -2,6 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, url_for
+from sqlalchemy import text
 
 from app.config import INSTANCE_DIR, config_por_nombre
 from app.core.auth import obtener_usuario_actual
@@ -12,6 +13,10 @@ from app.extensions import db, migrate
 load_dotenv()
 
 
+class ErrorConfiguracion(RuntimeError):
+    """Falta una variable de entorno obligatoria para este entorno."""
+
+
 def create_app(nombre_config=None):
     os.makedirs(INSTANCE_DIR, exist_ok=True)
 
@@ -19,6 +24,14 @@ def create_app(nombre_config=None):
 
     nombre_config = nombre_config or os.environ.get("FLASK_ENV", "development")
     app.config.from_object(config_por_nombre[nombre_config])
+
+    if nombre_config == "production" and not app.config.get("SQLALCHEMY_DATABASE_URI"):
+        raise ErrorConfiguracion(
+            "Falta DATABASE_URL en produccion. La aplicacion no debe iniciar "
+            "usando SQLite en produccion (el almacenamiento del contenedor es "
+            "efimero). Configura DATABASE_URL con la cadena de conexion de "
+            "PostgreSQL de Supabase en las variables de entorno de Railway."
+        )
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -51,7 +64,14 @@ def create_app(nombre_config=None):
 
     @app.get("/health")
     def health():
-        return jsonify({"status": "ok"})
+        estado_bd = "ok"
+        try:
+            db.session.execute(text("SELECT 1"))
+        except Exception:
+            estado_bd = "error"
+
+        codigo = 200 if estado_bd == "ok" else 503
+        return jsonify({"application": "ok", "database": estado_bd}), codigo
 
     @app.get("/")
     def index():
