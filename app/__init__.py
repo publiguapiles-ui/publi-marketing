@@ -25,6 +25,12 @@ def create_app(nombre_config=None):
 
     from app import models  # noqa: F401  registra los modelos en SQLAlchemy/Alembic
 
+    if os.environ.get("APLICAR_MIGRACIONES_AL_INICIAR", "1") == "1":
+        with app.app_context():
+            from flask_migrate import upgrade
+
+            upgrade()
+
     registrar_manejadores_error(app)
     registrar_blueprints(app)
 
