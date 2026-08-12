@@ -12,3 +12,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 python app.py
 ```
+
+## Deploy
+
+Cada push a `main` despliega automáticamente en Railway.
