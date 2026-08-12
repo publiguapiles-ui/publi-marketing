@@ -255,11 +255,13 @@ body {
   gap: 6px;
 }
 
-.formulario-simple input {
+.formulario-simple input,
+.formulario-simple select {
   padding: 10px 12px;
   border: 1px solid var(--color-borde);
   border-radius: 6px;
   font-size: 14px;
+  font-family: inherit;
 }
 
 .dashboard-empresa-activa {
@@ -844,6 +846,83 @@ body {
 
 @media (max-width: 768px) {
   .comparacion-antes-despues {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Photo Studio: logo, marca de agua y formatos (Paso 8) */
+
+.ps-preparar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: 24px;
+  align-items: start;
+}
+
+.ps-preparar-columna {
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.ps-panel-lote {
+  margin: 0 0 20px;
+  max-width: 480px;
+}
+
+.ps-preparar-preview {
+  background: repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 50% / 20px 20px;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+}
+
+.ps-preparar-preview img {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.campo-radios {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.campo-radios legend {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.opcion-radio,
+.opcion-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.campo-formatos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ps-preparar-resultados {
+  margin-top: 24px;
+}
+
+@media (max-width: 768px) {
+  .ps-preparar {
     grid-template-columns: 1fr;
   }
 }

@@ -13,11 +13,12 @@ estar activa. Esto es intencional (ver Paso 4 y las pruebas de
 aislamiento de este paso).
 """
 
-from flask import Blueprint, abort, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, jsonify, redirect, render_template, request, url_for
 
 from app.core.auth import obtener_usuario_actual
 from app.core.decorators import login_required
 from app.core.empresas import obtener_empresa_activa
+from app.models import APLICACIONES_LOGO, POSICIONES_LOGO, POSICION_LOGO_PREDETERMINADA
 from app.services.fotografia import (
     contar_fotografias,
     crear_fotografia,
@@ -28,16 +29,21 @@ from app.services.fotografia import (
     obtener_proyecto,
     obtener_proyectos_empresa,
 )
+from app.services.formatos import TIPOS_FORMATO, generar_formato
+from app.services.marca import obtener_logo, obtener_logo_marca_agua, obtener_logo_principal, obtener_logos_empresa
 from app.services.storage import (
     BUCKET_FOTOGRAFIAS,
+    BUCKET_LOGOS,
     TAMANO_MAXIMO_FOTO_BYTES,
+    descargar_archivo,
     detectar_tipo_mime_real,
     ruta_fotografia_original,
     storage_configurado,
     subir_archivo,
     url_firmada,
 )
-from app.services.derivados import crear_mejora_automatica, obtener_derivado, obtener_derivados_fotografia
+from app.services.derivados import crear_formato, crear_mejora_automatica, mejor_base_disponible, obtener_derivado, obtener_derivados_fotografia
+from app.services.procesamiento import cargar_imagen, detectar_rostros
 
 fotografia_bp = Blueprint("fotografia", __name__, url_prefix="/photo-studio")
 
@@ -115,8 +121,18 @@ def proyecto_detalle(proyecto_id):
     empresa, _rol, proyecto = _proyecto_de_empresa_activa(proyecto_id)
     fotos = obtener_fotografias_proyecto(proyecto.id)
     fotos_con_url = [(f, url_firmada(BUCKET_FOTOGRAFIAS, f.ruta_storage)) for f in fotos]
+    logos = obtener_logos_empresa(empresa.id)
+    logo_principal = obtener_logo_principal(empresa.id)
     return render_template(
-        "photo_studio/proyecto_detalle.html", empresa_activa=empresa, proyecto=proyecto, fotos=fotos_con_url
+        "photo_studio/proyecto_detalle.html",
+        empresa_activa=empresa,
+        proyecto=proyecto,
+        fotos=fotos_con_url,
+        logos=logos,
+        logo_principal=logo_principal,
+        posiciones=POSICIONES_LOGO,
+        posicion_predeterminada=POSICION_LOGO_PREDETERMINADA,
+        formatos=TIPOS_FORMATO,
     )
 
 
@@ -201,6 +217,167 @@ def foto_mejorar(fotografia_id):
     ), 201
 
 
+def _logo_validado(empresa_id, datos):
+    """(logo_o_None, error_o_None). Un logo_id que no pertenece a la
+    empresa activa es un error explicito -- nunca se confia en el
+    frontend para esto (Paso 8, puntos 30 y 31).
+    """
+    logo_id = datos.get("logo_id")
+    if not logo_id:
+        return None, None
+    try:
+        logo_id = int(logo_id)
+    except (TypeError, ValueError):
+        return None, "Logo inválido."
+    logo = obtener_logo(empresa_id, logo_id)
+    if logo is None:
+        return None, "El logo seleccionado no pertenece a esta empresa."
+    return logo, None
+
+
+def _parametros_preparacion(empresa, datos):
+    aplicacion = datos.get("aplicacion") or "sin_logo"
+    if aplicacion not in APLICACIONES_LOGO:
+        return None, "Modo de aplicación inválido."
+
+    posicion = datos.get("posicion") or POSICION_LOGO_PREDETERMINADA
+    if posicion not in POSICIONES_LOGO:
+        return None, "Posición inválida."
+
+    try:
+        opacidad = float(datos.get("opacidad", 0.8))
+    except (TypeError, ValueError):
+        opacidad = 0.8
+    opacidad = max(0.15, min(1.0, opacidad))
+
+    logo, error = _logo_validado(empresa.id, datos)
+    if error:
+        return None, error
+    if aplicacion != "sin_logo" and logo is None:
+        return None, "Selecciona un logo para aplicar."
+
+    return {"logo": logo, "aplicacion": aplicacion, "posicion": posicion, "opacidad": opacidad}, None
+
+
+@fotografia_bp.get("/fotos/<int:fotografia_id>/preparar")
+@login_required
+def foto_preparar_formulario(fotografia_id):
+    empresa, _rol, foto = _fotografia_de_empresa_activa(fotografia_id)
+    logos = obtener_logos_empresa(empresa.id)
+    logo_principal = obtener_logo_principal(empresa.id)
+    logo_marca_agua = obtener_logo_marca_agua(empresa.id)
+    url_foto = url_firmada(BUCKET_FOTOGRAFIAS, foto.ruta_storage)
+    return render_template(
+        "photo_studio/foto_preparar.html",
+        empresa_activa=empresa,
+        foto=foto,
+        logos=logos,
+        logo_principal=logo_principal,
+        logo_marca_agua=logo_marca_agua,
+        url_foto=url_foto,
+        posiciones=POSICIONES_LOGO,
+        posicion_predeterminada=POSICION_LOGO_PREDETERMINADA,
+        formatos=TIPOS_FORMATO,
+    )
+
+
+@fotografia_bp.post("/fotos/<int:fotografia_id>/preparar")
+@login_required
+def foto_preparar(fotografia_id):
+    empresa, _rol, foto = _fotografia_de_empresa_activa(fotografia_id)
+    usuario = obtener_usuario_actual()
+
+    if not storage_configurado():
+        return jsonify({"ok": False, "error": "El almacenamiento no está disponible en este momento."}), 503
+
+    datos = request.get_json(silent=True) or {}
+    parametros, error = _parametros_preparacion(empresa, datos)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    formatos_pedidos = [f for f in (datos.get("formatos") or []) if f in TIPOS_FORMATO]
+    if not formatos_pedidos:
+        return jsonify({"ok": False, "error": "Selecciona al menos un formato."}), 400
+
+    resultados = []
+    for tipo_formato in formatos_pedidos:
+        derivado = crear_formato(
+            empresa.id,
+            foto.proyecto_id,
+            foto,
+            usuario["id"],
+            tipo_formato,
+            logo=parametros["logo"],
+            aplicacion=parametros["aplicacion"],
+            posicion=parametros["posicion"],
+            opacidad=parametros["opacidad"],
+        )
+        resultados.append(
+            {
+                "tipo": tipo_formato,
+                "ok": derivado.estado == "completada",
+                "derivado_id": derivado.id,
+                "estado": derivado.estado,
+                "error": derivado.error_mensaje if derivado.estado == "error" else None,
+                "advertencia": derivado.advertencia,
+                "url_resultado": url_for("fotografia.derivado_detalle", derivado_id=derivado.id),
+            }
+        )
+
+    ok_general = any(r["ok"] for r in resultados)
+    codigo = 201 if ok_general else 502
+    return jsonify({"ok": ok_general, "resultados": resultados}), codigo
+
+
+@fotografia_bp.post("/fotos/<int:fotografia_id>/preparar/vista-previa")
+@login_required
+def foto_preparar_vista_previa(fotografia_id):
+    """Genera la vista previa con EXACTAMENTE el mismo algoritmo de
+    composicion que el resultado final (app.services.formatos), pero
+    sin guardar nada en Storage ni en la base de datos.
+    """
+    empresa, _rol, foto = _fotografia_de_empresa_activa(fotografia_id)
+
+    if not storage_configurado():
+        abort(503)
+
+    datos = request.get_json(silent=True) or {}
+    parametros, error = _parametros_preparacion(empresa, datos)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    tipo_formato = datos.get("formato")
+    if tipo_formato not in TIPOS_FORMATO:
+        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+
+    bucket_base, ruta_base = mejor_base_disponible(foto)
+    try:
+        bytes_base = descargar_archivo(bucket_base, ruta_base)
+    except Exception:
+        return jsonify({"ok": False, "error": "No se pudo cargar la fotografía."}), 502
+
+    imagen_base = cargar_imagen(bytes_base)
+    rostros = detectar_rostros(imagen_base)
+
+    logo_bytes = None
+    if parametros["logo"] is not None and parametros["aplicacion"] != "sin_logo":
+        logo_bytes = descargar_archivo(BUCKET_LOGOS, parametros["logo"].ruta_storage)
+
+    bytes_resultado, metadata = generar_formato(
+        bytes_base,
+        tipo_formato,
+        rostros,
+        logo_bytes=logo_bytes,
+        aplicacion=parametros["aplicacion"],
+        posicion=parametros["posicion"],
+        opacidad=parametros["opacidad"],
+    )
+    if bytes_resultado is None:
+        return jsonify({"ok": False, "error": metadata.get("advertencia") or "No se pudo generar la vista previa."}), 422
+
+    return Response(bytes_resultado, mimetype="image/jpeg")
+
+
 @fotografia_bp.get("/derivados/<int:derivado_id>")
 @login_required
 def derivado_detalle(derivado_id):
@@ -217,6 +394,7 @@ def derivado_detalle(derivado_id):
     url_derivado = url_firmada(BUCKET_FOTOGRAFIAS, derivado.ruta_storage) if derivado.ruta_storage else None
 
     correcciones = derivado.correcciones_aplicadas.split(",") if derivado.correcciones_aplicadas else []
+    logo_usado = obtener_logo(empresa.id, derivado.logo_id) if derivado.logo_id else None
 
     return render_template(
         "photo_studio/derivado_detalle.html",
@@ -227,6 +405,7 @@ def derivado_detalle(derivado_id):
         url_original=url_original,
         url_derivado=url_derivado,
         correcciones=correcciones,
+        logo_usado=logo_usado,
     )
 
 

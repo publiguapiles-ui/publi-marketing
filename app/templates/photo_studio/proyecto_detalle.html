@@ -27,11 +27,64 @@
   <div id="barra-seleccion" class="barra-seleccion" hidden>
     <span id="texto-seleccion">0 fotografías seleccionadas</span>
     <button type="button" id="boton-mejorar-seleccion" class="boton-secundario">Mejorar fotografías</button>
+    <button type="button" id="boton-abrir-formatos" class="boton-secundario">Generar formatos</button>
     <button type="button" class="boton-secundario" disabled title="Próximamente">Colorizar</button>
-    <button type="button" class="boton-secundario" disabled title="Próximamente">Generar formatos</button>
-    <button type="button" class="boton-secundario" disabled title="Próximamente">Aplicar logo</button>
     <button type="button" class="boton-secundario" disabled title="Próximamente">Descargar selección</button>
   </div>
+</div>
+
+<div id="panel-formatos-lote" class="ps-preparar-columna ps-panel-lote" hidden>
+  <h2 class="ps-seccion-titulo">Preparar formatos para la selección</h2>
+  <form id="form-preparar-lote" class="formulario-simple">
+    <label>
+      Logo
+      <select id="lote-campo-logo" name="logo_id" {% if not logos %}disabled{% endif %}>
+        <option value="">Sin logos disponibles</option>
+        {% for logo in logos %}
+        <option value="{{ logo.id }}" {% if logo_principal and logo.id == logo_principal.id %}selected{% endif %}>
+          {{ logo.nombre_archivo_original }} ({{ logo.tipo }})
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <fieldset class="campo-radios">
+      <legend>Aplicación</legend>
+      <label class="opcion-radio"><input type="radio" name="aplicacion" value="sin_logo" checked /> Sin logo</label>
+      <label class="opcion-radio"><input type="radio" name="aplicacion" value="logo" /> Logo</label>
+      <label class="opcion-radio"><input type="radio" name="aplicacion" value="marca_agua" /> Marca de agua</label>
+    </fieldset>
+
+    <label>
+      Posición
+      <select id="lote-campo-posicion" name="posicion">
+        {% for pos in posiciones %}
+        <option value="{{ pos }}" {% if pos == posicion_predeterminada %}selected{% endif %}>{{ pos.replace("_", " ")|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Opacidad: <span id="lote-valor-opacidad">80%</span>
+      <input type="range" id="lote-campo-opacidad" name="opacidad" min="15" max="100" value="80" />
+    </label>
+
+    <div class="campo-formatos">
+      {% for formato in formatos %}
+      <label class="opcion-check">
+        <input type="checkbox" name="formatos" value="{{ formato }}" />
+        {% if formato == "formato_cuadrado" %}Cuadrado (1080 × 1080)
+        {% elif formato == "formato_vertical" %}Vertical (1080 × 1350)
+        {% elif formato == "formato_historia" %}Historia (1080 × 1920)
+        {% else %}Horizontal (proporción original)
+        {% endif %}
+      </label>
+      {% endfor %}
+    </div>
+
+    <button type="submit" id="boton-generar-lote" class="boton-primario">Generar</button>
+    <button type="button" id="boton-cancelar-lote" class="boton-secundario">Cancelar</button>
+  </form>
 </div>
 
 {% if fotos %}
@@ -64,6 +117,7 @@
 <script>
   window.PS_SUBIR_URL = "{{ url_for('fotografia.subir_foto', proyecto_id=proyecto.id) }}";
   window.PS_MEJORAR_URL_BASE = "{{ url_for('fotografia.foto_mejorar', fotografia_id=0) }}".replace("/0/", "/__ID__/");
+  window.PS_PREPARAR_URL_BASE = "{{ url_for('fotografia.foto_preparar', fotografia_id=0) }}".replace("/0/", "/__ID__/");
 </script>
 <script src="{{ url_for('static', filename='js/photo_studio.js') }}"></script>
 {% endblock %}

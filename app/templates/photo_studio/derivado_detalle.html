@@ -4,6 +4,7 @@
 <a href="{{ url_for('fotografia.foto_detalle', fotografia_id=foto.id) }}" class="boton-enlace">← {{ foto.nombre_archivo_original }}</a>
 <h1>Antes / Después</h1>
 
+{% set es_mejora = derivado.tipo == "mejora_automatica" %}
 {% if derivado.estado == "completada" %}
 <div class="comparacion-antes-despues">
   <div class="comparacion-columna">
@@ -11,26 +12,47 @@
     {% if url_original %}<img src="{{ url_original }}" alt="Original" />{% endif %}
   </div>
   <div class="comparacion-columna">
-    <span class="comparacion-etiqueta">Mejorada (v{{ derivado.version }})</span>
-    {% if url_derivado %}<img src="{{ url_derivado }}" alt="Mejorada" />{% endif %}
+    <span class="comparacion-etiqueta">{{ "Mejorada" if es_mejora else derivado.tipo.replace("formato_", "")|capitalize }} (v{{ derivado.version }})</span>
+    {% if url_derivado %}<img src="{{ url_derivado }}" alt="{{ 'Mejorada' if es_mejora else 'Resultado' }}" />{% endif %}
   </div>
 </div>
+
+{% if derivado.advertencia %}
+<div class="login-aviso" role="alert">{{ derivado.advertencia }}</div>
+{% endif %}
 
 <div class="ps-metadata-caja">
   <h2>Información del procesamiento</h2>
   <dl class="perfil-datos">
     <dt>Tipo</dt>
-    <dd>Corrección automática</dd>
+    <dd>{{ "Corrección automática" if es_mejora else "Formato para redes (" + derivado.tipo.replace("formato_", "") + ")" }}</dd>
     <dt>Versión</dt>
     <dd>{{ derivado.version }}</dd>
     <dt>Fecha</dt>
     <dd>{{ derivado.creado_en.strftime("%Y-%m-%d %H:%M") }}</dd>
+    {% if es_mejora %}
     <dt>Procesamiento</dt>
     <dd>{{ correcciones | join(", ") | capitalize }}</dd>
     <dt>Protección facial</dt>
     <dd>{{ "Sí" if derivado.rostros_protegidos else "No" }}{% if derivado.rostros_detectados %} ({{ derivado.rostros_detectados }} rostro{{ "s" if derivado.rostros_detectados != 1 else "" }}){% endif %}</dd>
     <dt>Categoría</dt>
     <dd>{{ derivado.categoria_detectada }} (confianza {{ (derivado.confianza_categoria * 100) | round | int }}%)</dd>
+    {% else %}
+    <dt>Dimensiones</dt>
+    <dd>{{ derivado.ancho_px }} × {{ derivado.alto_px }} px</dd>
+    <dt>Rostros detectados</dt>
+    <dd>{{ derivado.rostros_detectados or 0 }}</dd>
+    <dt>Logo</dt>
+    <dd>{{ logo_usado.nombre_archivo_original if logo_usado else "Sin logo" }}</dd>
+    {% if derivado.aplicacion_logo and derivado.aplicacion_logo != "sin_logo" %}
+    <dt>Aplicación</dt>
+    <dd>{{ "Marca de agua" if derivado.aplicacion_logo == "marca_agua" else "Logo" }}</dd>
+    <dt>Posición</dt>
+    <dd>{{ derivado.posicion_logo.replace("_", " ")|capitalize if derivado.posicion_logo else "-" }}</dd>
+    <dt>Opacidad</dt>
+    <dd>{{ (derivado.opacidad_logo * 100) | round | int }}%</dd>
+    {% endif %}
+    {% endif %}
     <dt>Duración del procesamiento</dt>
     <dd>{{ derivado.duracion_segundos }} s</dd>
   </dl>

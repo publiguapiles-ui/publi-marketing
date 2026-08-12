@@ -79,6 +79,28 @@ def ruta_fotografia_original(empresa_id, proyecto_id, tipo_mime):
     )
 
 
+_SUBCARPETA_FORMATO = {
+    "formato_cuadrado": "square",
+    "formato_vertical": "portrait",
+    "formato_historia": "story",
+    "formato_horizontal": "horizontal",
+}
+
+
+def ruta_derivado_formato(empresa_id, proyecto_id, tipo_formato):
+    """Los formatos para redes (Paso 8) se guardan como JPEG de alta
+    calidad (el lienzo final siempre es opaco, ver
+    app/services/formatos.py), en su propia subcarpeta por tipo de
+    formato, y nunca reemplazan un archivo existente.
+    """
+    subcarpeta = _SUBCARPETA_FORMATO.get(tipo_formato, "otros")
+    sufijo = uuid.uuid4().hex[:8]
+    return (
+        f"empresas/{empresa_id}/fotografia/proyectos/{proyecto_id}/derivados/formatos/{subcarpeta}/"
+        f"{int(time.time())}-{sufijo}.jpg"
+    )
+
+
 def ruta_derivado_mejora(empresa_id, proyecto_id):
     """Los derivados de mejora automatica siempre se guardan como PNG
     (sin perdida -- ver services/procesamiento.py), en su propia

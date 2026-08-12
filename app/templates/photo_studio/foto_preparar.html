@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block titulo %}Preparar para redes · {{ foto.nombre_archivo_original }}{% endblock %}
+{% block contenido %}
+<a href="{{ url_for('fotografia.foto_detalle', fotografia_id=foto.id) }}" class="boton-enlace">← {{ foto.nombre_archivo_original }}</a>
+<h1>Preparar fotografía</h1>
+<p class="perfil-nota">El original permanecerá intacto. Cada formato generado es un archivo nuevo.</p>
+
+<div class="ps-preparar">
+  <section class="ps-preparar-columna">
+    <h2 class="ps-seccion-titulo">Fotografía</h2>
+    <div class="ps-preparar-preview">
+      <img id="preview-imagen" src="{{ url_foto }}" alt="{{ foto.nombre_archivo_original }}" />
+      <p id="preview-texto" class="tarjeta-foto-meta">Vista previa en vivo</p>
+    </div>
+  </section>
+
+  <section class="ps-preparar-columna">
+    <h2 class="ps-seccion-titulo">Marca</h2>
+    {% if not logos %}
+    <p class="perfil-nota">Esta empresa todavía no tiene logos en su biblioteca. Puedes generar formatos sin logo.</p>
+    {% endif %}
+    <form id="form-preparar" class="formulario-simple">
+      <label>
+        Logo
+        <select id="campo-logo" name="logo_id" {% if not logos %}disabled{% endif %}>
+          <option value="">Sin logos disponibles</option>
+          {% for logo in logos %}
+          <option value="{{ logo.id }}" {% if logo_principal and logo.id == logo_principal.id %}selected{% endif %}>
+            {{ logo.nombre_archivo_original }} ({{ logo.tipo }})
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <fieldset class="campo-radios">
+        <legend>Aplicación</legend>
+        <label class="opcion-radio"><input type="radio" name="aplicacion" value="sin_logo" checked /> Sin logo</label>
+        <label class="opcion-radio"><input type="radio" name="aplicacion" value="logo" /> Logo</label>
+        <label class="opcion-radio"><input type="radio" name="aplicacion" value="marca_agua" /> Marca de agua</label>
+      </fieldset>
+
+      <label>
+        Posición
+        <select id="campo-posicion" name="posicion">
+          {% for pos in posiciones %}
+          <option value="{{ pos }}" {% if pos == posicion_predeterminada %}selected{% endif %}>{{ pos.replace("_", " ")|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>
+        Opacidad: <span id="valor-opacidad">80%</span>
+        <input type="range" id="campo-opacidad" name="opacidad" min="15" max="100" value="80" />
+      </label>
+
+      <div id="advertencia-logo" class="login-aviso" hidden></div>
+
+      <h2 class="ps-seccion-titulo">Formatos</h2>
+      <div class="campo-formatos">
+        {% for formato in formatos %}
+        <label class="opcion-check">
+          <input type="checkbox" name="formatos" value="{{ formato }}" />
+          {% if formato == "formato_cuadrado" %}Cuadrado (1080 × 1080)
+          {% elif formato == "formato_vertical" %}Vertical (1080 × 1350)
+          {% elif formato == "formato_historia" %}Historia (1080 × 1920)
+          {% else %}Horizontal (proporción original)
+          {% endif %}
+        </label>
+        {% endfor %}
+      </div>
+
+      <button type="submit" id="boton-generar" class="boton-primario">Generar formatos</button>
+    </form>
+  </section>
+</div>
+
+<div id="zona-resultados" class="ps-preparar-resultados" hidden>
+  <h2 class="ps-seccion-titulo">Resultado</h2>
+  <ul id="lista-resultados" class="lista-derivados"></ul>
+</div>
+
+<script>
+  window.PS_PREPARAR_URL = "{{ url_for('fotografia.foto_preparar', fotografia_id=foto.id) }}";
+  window.PS_PREPARAR_VISTA_PREVIA_URL = "{{ url_for('fotografia.foto_preparar_vista_previa', fotografia_id=foto.id) }}";
+  window.PS_FOTO_URL_ORIGINAL = "{{ url_foto }}";
+</script>
+<script src="{{ url_for('static', filename='js/photo_studio_preparar.js') }}"></script>
+{% endblock %}

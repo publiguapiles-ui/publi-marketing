@@ -50,6 +50,29 @@ def _siguiente_version(fotografia_id, tipo):
     return (ultimo.version + 1) if ultimo else 1
 
 
+def mejor_base_disponible(fotografia):
+    """(bucket, ruta) de la mejor version disponible para partir al
+    generar un formato: la ultima mejora automatica COMPLETADA si
+    existe (ver flujo ORIGINAL -> MEJORA -> FORMATOS del Paso 8),
+    si no el original. El original en si nunca se elige para
+    verificar su integridad mas abajo: eso siempre se hace contra
+    `fotografia.ruta_storage`, sin importar cual haya sido la base.
+    """
+    from app.extensions import db
+    from app.models import FotografiaDerivada
+    from app.services.storage import BUCKET_FOTOGRAFIAS
+
+    mejora = (
+        db.session.query(FotografiaDerivada)
+        .filter_by(fotografia_id=fotografia.id, tipo="mejora_automatica", estado="completada")
+        .order_by(FotografiaDerivada.version.desc())
+        .first()
+    )
+    if mejora is not None and mejora.ruta_storage:
+        return BUCKET_FOTOGRAFIAS, mejora.ruta_storage
+    return BUCKET_FOTOGRAFIAS, fotografia.ruta_storage
+
+
 def crear_mejora_automatica(empresa_id, proyecto_id, fotografia, usuario_id):
     """Crea (sincronamente, via services/tareas.py) una version mejorada
     de `fotografia`. Devuelve el registro FotografiaDerivada, con
@@ -110,6 +133,109 @@ def crear_mejora_automatica(empresa_id, proyecto_id, fotografia, usuario_id):
             derivado.rostros_detectados = metadata["rostros_detectados"]
             derivado.rostros_protegidos = metadata["rostros_protegidos"]
             derivado.correcciones_aplicadas = ",".join(metadata["correcciones_aplicadas"])
+            derivado.duracion_segundos = metadata["duracion_segundos"]
+            derivado.estado = "completada"
+        except Exception as exc:
+            derivado.estado = "error"
+            derivado.error_mensaje = str(exc)[:500]
+        db.session.commit()
+        return derivado
+
+    return encolar(_procesar)
+
+
+def crear_formato(empresa_id, proyecto_id, fotografia, usuario_id, tipo_formato, logo=None, aplicacion="sin_logo", posicion="inferior_derecha", opacidad=0.8):
+    """Crea (sincronamente, via services/tareas.py) un formato para
+    redes sociales (cuadrado/vertical/historia/horizontal), con logo o
+    marca de agua opcional.
+
+    `logo`, si se pasa, DEBE ser un objeto Logo ya validado por el
+    llamador (obtenido con empresa_id, ver app/services/marca.py) --
+    esta funcion no vuelve a validar pertenencia de empresa, igual que
+    crear_mejora_automatica no vuelve a validar la fotografia.
+    """
+    from app.extensions import db
+    from app.models import FotografiaDerivada
+    from app.services.formatos import generar_formato
+    from app.services.procesamiento import cargar_imagen, detectar_rostros
+    from app.services.storage import (
+        BUCKET_FOTOGRAFIAS,
+        BUCKET_LOGOS,
+        descargar_archivo,
+        ruta_derivado_formato,
+        subir_archivo,
+    )
+    from app.services.tareas import encolar
+
+    derivado = FotografiaDerivada(
+        empresa_id=empresa_id,
+        fotografia_id=fotografia.id,
+        tipo=tipo_formato,
+        version=_siguiente_version(fotografia.id, tipo_formato),
+        estado="pendiente",
+        logo_id=logo.id if logo else None,
+        aplicacion_logo=aplicacion,
+        posicion_logo=posicion if aplicacion != "sin_logo" else None,
+        opacidad_logo=opacidad if aplicacion != "sin_logo" else None,
+        creado_por=usuario_id,
+    )
+    db.session.add(derivado)
+    db.session.commit()
+
+    def _procesar():
+        derivado.estado = "procesando"
+        db.session.commit()
+
+        try:
+            hash_antes = _hash(descargar_archivo(BUCKET_FOTOGRAFIAS, fotografia.ruta_storage))
+
+            bucket_base, ruta_base = mejor_base_disponible(fotografia)
+            bytes_base = descargar_archivo(bucket_base, ruta_base)
+
+            imagen_base = cargar_imagen(bytes_base)
+            rostros = detectar_rostros(imagen_base)
+
+            logo_bytes = None
+            if logo is not None and aplicacion != "sin_logo":
+                logo_bytes = descargar_archivo(BUCKET_LOGOS, logo.ruta_storage)
+
+            bytes_resultado, metadata = generar_formato(
+                bytes_base,
+                tipo_formato,
+                rostros,
+                logo_bytes=logo_bytes,
+                aplicacion=aplicacion,
+                posicion=posicion,
+                opacidad=opacidad,
+            )
+
+            # Verificacion de integridad del original (misma regla del
+            # Paso 7): si cambio durante el procesamiento, es un error
+            # critico, sin importar si la base usada fue el original o
+            # una mejora ya existente.
+            hash_despues = _hash(descargar_archivo(BUCKET_FOTOGRAFIAS, fotografia.ruta_storage))
+            if hash_antes != hash_despues:
+                derivado.estado = "error"
+                derivado.error_mensaje = "Verificacion de integridad fallida: el original cambio durante el procesamiento."
+                db.session.commit()
+                return derivado
+
+            if bytes_resultado is None:
+                derivado.estado = "error"
+                derivado.error_mensaje = metadata.get("advertencia") or "No se pudo generar el formato."
+                db.session.commit()
+                return derivado
+
+            ruta = ruta_derivado_formato(empresa_id, proyecto_id, tipo_formato)
+            subir_archivo(BUCKET_FOTOGRAFIAS, ruta, bytes_resultado, "image/jpeg")
+
+            derivado.ruta_storage = ruta
+            derivado.tipo_mime = "image/jpeg"
+            derivado.tamano_bytes = len(bytes_resultado)
+            derivado.rostros_detectados = len(rostros)
+            derivado.ancho_px = metadata["ancho_px"]
+            derivado.alto_px = metadata["alto_px"]
+            derivado.advertencia = metadata.get("advertencia")
             derivado.duracion_segundos = metadata["duracion_segundos"]
             derivado.estado = "completada"
         except Exception as exc:

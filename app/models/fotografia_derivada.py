@@ -2,8 +2,19 @@ from datetime import datetime, timezone
 
 from app.extensions import db
 
-TIPOS_DERIVADO = ["mejora_automatica"]  # mas tipos se agregaran en pasos futuros (formatos, etc.)
+TIPOS_DERIVADO = [
+    "mejora_automatica",
+    "formato_cuadrado",
+    "formato_vertical",
+    "formato_historia",
+    "formato_horizontal",
+]
 ESTADOS_DERIVADO = ["pendiente", "procesando", "completada", "error"]
+
+# Paso 8: aplicacion de logo/marca de agua sobre un formato generado.
+APLICACIONES_LOGO = ["sin_logo", "logo", "marca_agua"]
+POSICIONES_LOGO = ["superior_izquierda", "superior_derecha", "inferior_izquierda", "inferior_derecha", "centro"]
+POSICION_LOGO_PREDETERMINADA = "inferior_derecha"
 
 
 class FotografiaDerivada(db.Model):
@@ -42,6 +53,18 @@ class FotografiaDerivada(db.Model):
     correcciones_aplicadas = db.Column(db.String(255))  # lista separada por comas
     duracion_segundos = db.Column(db.Float)
 
+    # Paso 8: metadata de logo/marca de agua y del formato generado.
+    # logo_id se deja SET NULL en cascada (no se borra el derivado si el
+    # logo se elimina despues) porque el registro sigue siendo un
+    # historial valido de lo que se genero en su momento.
+    logo_id = db.Column(db.Integer, db.ForeignKey("logos.id", ondelete="SET NULL"), nullable=True)
+    aplicacion_logo = db.Column(db.String(20))  # uno de APLICACIONES_LOGO
+    posicion_logo = db.Column(db.String(30))  # uno de POSICIONES_LOGO
+    opacidad_logo = db.Column(db.Float)
+    ancho_px = db.Column(db.Integer)
+    alto_px = db.Column(db.Integer)
+    advertencia = db.Column(db.String(255))  # ej. "no se encontro encuadre seguro", logo de baja resolucion
+
     creado_por = db.Column(db.String(36), db.ForeignKey("usuarios.id"), nullable=True)
 
     creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
@@ -54,6 +77,7 @@ class FotografiaDerivada(db.Model):
 
     fotografia = db.relationship("Fotografia")
     empresa = db.relationship("Empresa")
+    logo = db.relationship("Logo")
 
     def __repr__(self):
         return f"<FotografiaDerivada {self.tipo} v{self.version} foto={self.fotografia_id} estado={self.estado}>"
