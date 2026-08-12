@@ -31,6 +31,25 @@
     <div class="contenido-principal">
       <header class="header">
         <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menú">☰</button>
+
+        {% if usuario_actual and empresas_usuario %}
+        <div class="header-empresa">
+          {% if empresas_usuario|length > 1 %}
+          <form method="post" action="{{ url_for('empresas.cambiar_activa') }}" class="selector-empresa-form">
+            <select name="empresa_id" onchange="this.form.submit()" aria-label="Empresa activa">
+              {% for empresa, rol in empresas_usuario %}
+              <option value="{{ empresa.id }}" {% if empresa_activa and empresa.id == empresa_activa.id %}selected{% endif %}>
+                {{ empresa.nombre }}
+              </option>
+              {% endfor %}
+            </select>
+          </form>
+          {% else %}
+          <span class="empresa-activa-nombre">{{ empresa_activa.nombre }}</span>
+          {% endif %}
+        </div>
+        {% endif %}
+
         <div class="header-usuario">
           {% if usuario_actual %}
             <a href="{{ url_for('auth.perfil') }}" class="header-usuario-nombre">

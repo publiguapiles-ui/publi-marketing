@@ -23,6 +23,25 @@ def obtener_cliente_auth():
     return _cliente_auth
 
 
+def _sincronizar_usuario_local(usuario_supabase, nombre):
+    """Crea o actualiza la fila local en `usuarios` para el usuario ya
+    autenticado por Supabase Auth. Solo guarda id/nombre/email: nunca
+    contrasenas, y nunca duplica lo que Supabase Auth ya administra.
+    """
+    from app.extensions import db
+    from app.models import Usuario
+
+    registro = db.session.get(Usuario, usuario_supabase.id)
+    if registro is None:
+        registro = Usuario(id=usuario_supabase.id, nombre=nombre or usuario_supabase.email, email=usuario_supabase.email)
+        db.session.add(registro)
+    else:
+        registro.email = usuario_supabase.email
+        if nombre:
+            registro.nombre = nombre
+    db.session.commit()
+
+
 def iniciar_sesion(auth_response):
     """Guarda en la sesion de Flask (cookie firmada) los datos minimos
     del usuario ya autenticado por Supabase Auth. No se guarda la
@@ -31,11 +50,14 @@ def iniciar_sesion(auth_response):
     """
     usuario = auth_response.user
     datos_sesion = auth_response.session
+    nombre = (usuario.user_metadata or {}).get("nombre")
+
+    _sincronizar_usuario_local(usuario, nombre)
 
     session.clear()
     session["usuario_id"] = usuario.id
     session["usuario_email"] = usuario.email
-    session["usuario_nombre"] = (usuario.user_metadata or {}).get("nombre")
+    session["usuario_nombre"] = nombre
     session["expires_at"] = datos_sesion.expires_at
     session["access_token"] = datos_sesion.access_token
     session["refresh_token"] = datos_sesion.refresh_token

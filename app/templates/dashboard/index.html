@@ -2,5 +2,21 @@
 {% block titulo %}Dashboard · Publi Marketing{% endblock %}
 {% block contenido %}
 <h1>Dashboard</h1>
-<p>Bienvenido a Publi Marketing. Este panel se completará en las próximas etapas.</p>
+
+{% if empresa_activa %}
+<div class="dashboard-empresa-activa">
+  <h2>{{ empresa_activa.nombre }}</h2>
+  <p>Tu rol: <strong>{{ rol_activo.nombre }}</strong></p>
+  <p>Estado: {{ "Activa" if empresa_activa.activo else "Inactiva" }}</p>
+</div>
+{% elif empresas_usuario %}
+<div class="estado-vacio">
+  <p>Tienes acceso a {{ empresas_usuario|length }} empresas. Selecciona una arriba para continuar.</p>
+</div>
+{% else %}
+<div class="estado-vacio">
+  <p>Todavía no tienes ninguna empresa registrada.</p>
+  <a href="{{ url_for('empresas.nueva') }}">Crear tu primera empresa</a>
+</div>
+{% endif %}
 {% endblock %}

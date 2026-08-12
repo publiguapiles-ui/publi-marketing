@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block titulo %}Nueva empresa · Publi Marketing{% endblock %}
+{% block contenido %}
+<h1>Nueva empresa</h1>
+
+{% if error %}
+<div class="login-error" role="alert">{{ error }}</div>
+{% endif %}
+
+<form method="post" class="formulario-simple">
+  <label>
+    Nombre
+    <input type="text" name="nombre" value="{{ nombre }}" required autofocus />
+  </label>
+  <button type="submit" class="boton-primario">Crear empresa</button>
+</form>
+<p class="perfil-nota">
+  Al crearla quedarás como Administrador. Logo, colores e información comercial se agregan más adelante.
+</p>
+{% endblock %}

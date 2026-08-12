@@ -5,6 +5,7 @@ from flask import Flask, jsonify, redirect, url_for
 
 from app.config import INSTANCE_DIR, config_por_nombre
 from app.core.auth import obtener_usuario_actual
+from app.core.empresas import obtener_empresa_activa, obtener_empresas_usuario
 from app.core.errors import registrar_manejadores_error
 from app.extensions import db, migrate
 
@@ -28,8 +29,19 @@ def create_app(nombre_config=None):
     registrar_blueprints(app)
 
     @app.context_processor
-    def inyectar_usuario_actual():
-        return {"usuario_actual": obtener_usuario_actual()}
+    def inyectar_contexto_global():
+        usuario = obtener_usuario_actual()
+        empresa_activa, rol_activo = (None, None)
+        empresas_usuario = []
+        if usuario is not None:
+            empresa_activa, rol_activo = obtener_empresa_activa()
+            empresas_usuario = obtener_empresas_usuario(usuario["id"])
+        return {
+            "usuario_actual": usuario,
+            "empresa_activa": empresa_activa,
+            "rol_activo": rol_activo,
+            "empresas_usuario": empresas_usuario,
+        }
 
     @app.get("/health")
     def health():

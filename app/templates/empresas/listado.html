@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titulo %}Empresas · Publi Marketing{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <h1>Empresas</h1>
+  <a href="{{ url_for('empresas.nueva') }}" class="boton-primario">+ Nueva empresa</a>
+</div>
+
+{% if empresas %}
+<table class="tabla-simple">
+  <thead>
+    <tr>
+      <th>Nombre</th>
+      <th>Estado</th>
+      <th>Tu rol</th>
+      <th>Activa</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for empresa, rol in empresas %}
+    <tr>
+      <td><a href="{{ url_for('empresas.detalle', slug=empresa.slug) }}">{{ empresa.nombre }}</a></td>
+      <td>{{ "Activa" if empresa.activo else "Inactiva" }}</td>
+      <td>{{ rol.nombre }}</td>
+      <td>{% if empresa_activa and empresa.id == empresa_activa.id %}✅{% endif %}</td>
+      <td>
+        {% if not (empresa_activa and empresa.id == empresa_activa.id) %}
+        <form method="post" action="{{ url_for('empresas.cambiar_activa') }}">
+          <input type="hidden" name="empresa_id" value="{{ empresa.id }}" />
+          <button type="submit" class="boton-enlace">Usar esta empresa</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="estado-vacio">
+  <p>Todavía no tienes ninguna empresa registrada.</p>
+  <a href="{{ url_for('empresas.nueva') }}">Crear tu primera empresa</a>
+</div>
+{% endif %}
+{% endblock %}

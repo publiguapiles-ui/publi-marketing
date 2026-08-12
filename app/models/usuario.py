@@ -15,6 +15,12 @@ class Usuario(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False)
     activo = db.Column(db.Boolean, default=True, nullable=False)
     creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    actualizado_en = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     empresas = db.relationship("UsuarioEmpresaRol", back_populates="usuario")
 

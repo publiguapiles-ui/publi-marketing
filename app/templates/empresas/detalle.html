@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block titulo %}{{ empresa.nombre }} · Publi Marketing{% endblock %}
+{% block contenido %}
+<h1>{{ empresa.nombre }}</h1>
+<dl class="perfil-datos">
+  <dt>Slug</dt>
+  <dd>{{ empresa.slug }}</dd>
+  <dt>Estado</dt>
+  <dd>{{ "Activa" if empresa.activo else "Inactiva" }}</dd>
+  <dt>Tu rol</dt>
+  <dd>{{ rol.nombre }}</dd>
+</dl>
+<p class="perfil-nota">Logo, colores e información comercial se agregarán en una etapa posterior.</p>
+{% endblock %}
