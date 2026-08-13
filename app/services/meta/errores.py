@@ -118,11 +118,17 @@ def _detalle_uso_meta(uso_meta):
             if partes:
                 break
 
-    if not partes:
-        app = uso_meta.get("app")
-        if isinstance(app, dict):
-            maximo = max((v for v in app.values() if isinstance(v, (int, float))), default=None)
-            if maximo is not None:
-                partes.append(f"App: {maximo}% de la cuota usada.")
+    # Siempre se muestra el uso a nivel de app tambien (no solo cuando la
+    # cuenta publicitaria no reporto nada) -- son cuotas INDEPENDIENTES en
+    # Meta, y una cuenta publicitaria en 0% no significa que la app en su
+    # conjunto (compartida entre todas las pruebas hechas con este mismo
+    # META_APP_ID) no este topada. Ocultarla llevaria a pensar que no hay
+    # ningun limite activo cuando en realidad si lo hay, solo que en otro
+    # nivel.
+    app = uso_meta.get("app")
+    if isinstance(app, dict):
+        maximo = max((v for v in app.values() if isinstance(v, (int, float))), default=None)
+        if maximo is not None:
+            partes.append(f"App: {maximo}% de la cuota usada.")
 
     return " ".join(partes) or None

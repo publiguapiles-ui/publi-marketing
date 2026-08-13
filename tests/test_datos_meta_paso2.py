@@ -162,6 +162,21 @@ def test_mensaje_para_usuario_incluye_porcentaje_real_de_cuenta_publicitaria():
     assert "100%" in mensaje
 
 
+def test_mensaje_para_usuario_muestra_cuenta_y_app_a_la_vez():
+    """Verificacion real (Paso 6): la cuenta publicitaria reporto 0% de
+    uso pero Meta igual rechazo la solicitud con limite_api -- el
+    verdadero responsable era la cuota de la app completa. Ocultar ese
+    dato porque la cuenta ya "dijo algo" habria sido enganoso."""
+    from app.services.meta.client import MetaAPIError
+    from app.services.meta.errores import mensaje_para_usuario
+
+    uso = {"cuenta_publicitaria": {"acc_id_util_pct": 0}, "app": {"call_count": 98, "total_time": 95}}
+    exc = MetaAPIError("Rate limit", codigo=613, uso_meta=uso)
+    mensaje = mensaje_para_usuario("limite_api", exc)
+    assert "0%" in mensaje
+    assert "98%" in mensaje
+
+
 def test_mensaje_para_usuario_incluye_estimacion_de_business_use_case():
     from app.services.meta.client import MetaAPIError
     from app.services.meta.errores import mensaje_para_usuario
