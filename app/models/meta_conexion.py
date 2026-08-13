@@ -42,6 +42,11 @@ class MetaConexion(db.Model):
     ultimo_error = db.Column(db.String(500))
 
     ultima_sincronizacion_en = db.Column(db.DateTime, nullable=True)
+    # Paso 2: distinto de `ultima_sincronizacion_en` -- se actualiza en
+    # CUALQUIER llamada exitosa a la Graph API con esta conexion (no
+    # solo sincronizaciones completas), para poder mostrar "conexion
+    # inactiva hace X dias" incluso si nunca se disparo una sync formal.
+    ultimo_uso_en = db.Column(db.DateTime, nullable=True)
 
     conectado_por = db.Column(db.String(36), db.ForeignKey("usuarios.id"), nullable=True)
 

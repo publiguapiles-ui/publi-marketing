@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block titulo %}Prueba de KPI · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Prueba de KPI — pantalla de verificación del motor, no es el panel definitivo.</p>
+  </div>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+</div>
+
+<form class="formulario-simple dm-form-kpi" method="get">
+  <label>
+    Cuenta publicitaria
+    <select name="cuenta_id">
+      <option value="">Toda la empresa</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}" {% if cuenta_id == cuenta.id %}selected{% endif %}>{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Período
+    <select name="periodo">
+      {% for p in periodos %}
+      <option value="{{ p }}" {% if p == periodo_clave %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Desde (si es personalizado) <input type="date" name="fecha_inicio" value="{{ request.args.get('fecha_inicio', '') }}" /></label>
+  <label>Hasta (si es personalizado) <input type="date" name="fecha_fin" value="{{ request.args.get('fecha_fin', '') }}" /></label>
+  <button type="submit" class="boton-primario">Consultar</button>
+</form>
+
+{% if not cuentas %}
+<div class="estado-vacio">
+  <p>Todavía no hay ninguna cuenta publicitaria vinculada.</p>
+  <a href="{{ url_for('datos_meta.seleccionar_activos') }}">Elegir activos</a>.
+</div>
+{% endif %}
+
+{% if error_entidad %}
+<div class="estado-vacio">
+  <p>{{ error_entidad }}</p>
+</div>
+{% endif %}
+
+<h2 class="ps-seccion-titulo">
+  KPI — {{ entidad_seleccionada.nombre if entidad_seleccionada else "Toda la empresa" }}
+  <span class="perfil-nota">({{ fecha_inicio.strftime("%d/%m/%Y") }} – {{ fecha_fin.strftime("%d/%m/%Y") }} vs. {{ comparacion_periodos.periodo_anterior.fecha_inicio.strftime("%d/%m/%Y") }} – {{ comparacion_periodos.periodo_anterior.fecha_fin.strftime("%d/%m/%Y") }})</span>
+</h2>
+
+<div class="dm-tabla-scroll">
+<table class="dm-tabla-kpi">
+  <thead>
+    <tr>
+      <th>KPI</th>
+      <th>Período actual</th>
+      <th>Período anterior</th>
+      <th>Variación</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for clave in claves_kpi %}
+    {% set actual = comparacion_periodos.periodo_actual.kpis.get(clave) %}
+    {% set anterior = comparacion_periodos.periodo_anterior.kpis.get(clave) %}
+    {% set variacion = comparacion_periodos.variacion_porcentual.get(clave) %}
+    <tr>
+      <td>{{ etiquetas_kpi.get(clave, clave) }}</td>
+      <td>{{ actual if actual is not none else "No disponible" }}</td>
+      <td>{{ anterior if anterior is not none else "No disponible" }}</td>
+      <td>
+        {% if variacion is none %}
+          —
+        {% else %}
+          <span class="{{ 'dm-variacion-positiva' if variacion > 0 else ('dm-variacion-negativa' if variacion < 0 else '') }}">{{ variacion }}%</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if comparacion_entidades %}
+<h2 class="ps-seccion-titulo">Comparación de campañas (ordenadas por inversión)</h2>
+<div class="dm-tabla-scroll">
+<table class="dm-tabla-kpi">
+  <thead>
+    <tr>
+      <th>Campaña</th>
+      <th>Inversión</th>
+      <th>CTR</th>
+      <th>CPC</th>
+      <th>Conversiones</th>
+      <th>ROAS</th>
+      <th>Rendimiento</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for fila in comparacion_entidades %}
+    <tr>
+      <td>{{ fila.entidad.nombre or fila.entidad.id_externo }}</td>
+      <td>{{ fila.kpis.spend if fila.kpis.spend is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.ctr if fila.kpis.ctr is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.cpc if fila.kpis.cpc is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.conversiones if fila.kpis.conversiones is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.roas if fila.kpis.roas is not none else "No disponible" }}</td>
+      <td>
+        {% if fila.es_mejor %}<span class="estado-badge estado-badge-activa">Mejor</span>{% endif %}
+        {% if fila.es_peor %}<span class="estado-badge estado-badge-error">Peor</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h2 class="ps-seccion-titulo">Presupuesto de pauta</h2>
+{% if presupuestos %}
+<ul class="lista-simple dm-lista-presupuestos">
+  {% for r in presupuestos %}
+  <li>
+    <strong>{{ r.presupuesto.nombre }}</strong>
+    <span class="perfil-nota">({{ "Estratégico" if r.presupuesto.tipo == "estrategico" else "Asignado" }})</span>
+    — planificado: {{ r.presupuesto.monto }} {{ r.presupuesto.moneda }} ·
+    gasto real: {{ r.gasto_real }} {{ r.presupuesto.moneda }} ·
+    restante:
+    <span class="{{ 'dm-excedido' if r.excedido else '' }}">{{ r.disponible }} {{ r.presupuesto.moneda }}</span>
+    {% if r.porcentaje_usado is not none %}({{ r.porcentaje_usado }}% ejecutado){% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="perfil-nota">Ningún presupuesto de pauta definido todavía.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block titulo %}Seleccionar activos · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Selecciona qué activos vincular a <strong>{{ empresa_activa.nombre }}</strong></p>
+  </div>
+</div>
+
+<p class="perfil-nota">Solo lo que marques aquí quedará vinculado a esta empresa. Puedes cambiar la selección más adelante.</p>
+
+<form id="form-seleccion-activos" class="dm-form-seleccion">
+  <section class="dm-grupo-seleccion">
+    <h2 class="ps-seccion-titulo">Cuentas publicitarias</h2>
+    {% if cuentas_publicitarias %}
+    <ul class="lista-simple dm-lista-checks">
+      {% for cuenta in cuentas_publicitarias %}
+      <li>
+        <label class="dm-opcion-check">
+          <input type="checkbox" class="dm-check-cuenta" value="{{ cuenta.id_externo }}"
+                 data-nombre="{{ cuenta.nombre or cuenta.id_externo }}"
+                 data-estado="{{ cuenta.estado }}"
+                 data-moneda="{{ cuenta.atributos.moneda or '' }}"
+                 data-zona-horaria="{{ cuenta.atributos.zona_horaria or '' }}"
+                 {% if ('cuenta_publicitaria', cuenta.id_externo) in ya_vinculadas %}checked{% endif %} />
+          {{ cuenta.nombre or cuenta.id_externo }}
+          <span class="perfil-nota">({{ cuenta.id_externo }} · {{ cuenta.atributos.moneda or "—" }})</span>
+        </label>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="perfil-nota">No se encontró ninguna cuenta publicitaria para este usuario de Meta.</p>
+    {% endif %}
+  </section>
+
+  <section class="dm-grupo-seleccion">
+    <h2 class="ps-seccion-titulo">Páginas de Facebook</h2>
+    {% if paginas %}
+    <ul class="lista-simple dm-lista-checks">
+      {% for pagina in paginas %}
+      <li>
+        <label class="dm-opcion-check">
+          <input type="checkbox" class="dm-check-pagina" value="{{ pagina.id_externo }}"
+                 data-nombre="{{ pagina.nombre or pagina.id_externo }}"
+                 data-categoria="{{ pagina.atributos.categoria or '' }}"
+                 {% if pagina.instagram %}data-instagram-id="{{ pagina.instagram.id_externo }}"{% endif %}
+                 {% if ('pagina', pagina.id_externo) in ya_vinculadas %}checked{% endif %} />
+          {{ pagina.nombre or pagina.id_externo }}
+          <span class="perfil-nota">({{ pagina.atributos.categoria or "—" }}{% if pagina.instagram %} · incluye Instagram{% endif %})</span>
+        </label>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="perfil-nota">No se encontró ninguna página para este usuario de Meta.</p>
+    {% endif %}
+  </section>
+
+  <div class="cabecera-seccion">
+    <button type="submit" id="boton-vincular" class="boton-primario">Vincular seleccionados</button>
+    <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">Cancelar</a>
+  </div>
+  <p id="seleccion-mensaje" class="perfil-nota" hidden></p>
+</form>
+
+<script>
+  window.DM_VINCULAR_URL = "{{ url_for('datos_meta.conexiones_vincular_activos') }}";
+  window.DM_CONEXIONES_URL = "{{ url_for('datos_meta.conexiones') }}";
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_seleccion.js') }}"></script>
+{% endblock %}

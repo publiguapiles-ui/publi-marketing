@@ -258,44 +258,112 @@ def test_desconectar_ruta_aislada_entre_empresas(client, usuario_a_con_empresa, 
 
 # --- Descubrimiento de cuentas (MetaClient mockeado, sin red real) --------------
 
-def test_descubrir_cuentas_guarda_entidades_desde_respuestas_mockeadas(client, usuario_a_con_empresa, monkeypatch):
+def _mockear_get_meta(monkeypatch, mapa_respuestas):
+    """`mapa_respuestas` es {ruta_o_prefijo: respuesta_dict}. No hace
+    ninguna llamada de red real -- reemplaza MetaClient.get."""
+    import app.services.meta.client as client_mod
+
+    def _get_falso(self, ruta, params=None, access_token=None):
+        for prefijo, respuesta in mapa_respuestas.items():
+            if ruta == prefijo or ruta.startswith(prefijo):
+                return respuesta
+        raise AssertionError(f"ruta inesperada en el mock: {ruta}")
+
+    monkeypatch.setattr(client_mod.MetaClient, "get", _get_falso)
+    monkeypatch.setattr(client_mod.MetaClient, "get_todas_las_paginas", lambda self, ruta, params=None, limite_paginas=20: _get_falso(self, ruta, params).get("data", []))
+
+
+def test_listar_activos_disponibles_no_persiste_nada(client, usuario_a_con_empresa, monkeypatch):
+    """Paso 2, punto 4: descubrir NUNCA debe escribir en la base de
+    datos por si solo -- solo devuelve la lista para elegir."""
+    from app.extensions import db
+    from app.models import EntidadPublicitaria
     from app.services.meta.conexiones import crear_conexion
 
     with client.application.app_context():
         crear_conexion(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "111", "A", "token-a")
 
-    def _get_falso(self, ruta, params=None, access_token=None):
-        if ruta == "me/adaccounts":
-            return {"data": [{"account_id": "123456", "name": "Cuenta Principal", "currency": "USD", "timezone_name": "America/Costa_Rica", "account_status": 1}]}
-        if ruta == "me/accounts":
-            return {"data": [{"id": "987654", "name": "Página de prueba", "category": "Restaurante", "instagram_business_account": {"id": "555111"}}]}
-        raise AssertionError(f"ruta inesperada: {ruta}")
+    _mockear_get_meta(monkeypatch, {
+        "me/adaccounts": {"data": [{"account_id": "123456", "name": "Cuenta Principal", "currency": "USD", "timezone_name": "America/Costa_Rica", "account_status": 1}]},
+        "me/accounts": {"data": [{"id": "987654", "name": "Página de prueba", "category": "Restaurante", "instagram_business_account": {"id": "555111"}}]},
+    })
 
-    import app.services.meta.client as client_mod
-
-    monkeypatch.setattr(client_mod.MetaClient, "get", _get_falso)
-
-    from app.services.meta.cuentas_service import descubrir_cuentas, listar_entidades_empresa
+    from app.services.meta.cuentas_service import listar_activos_disponibles, listar_entidades_empresa
 
     with client.application.app_context():
-        resumen, error = descubrir_cuentas(usuario_a_con_empresa["empresa_id"])
+        disponibles, error = listar_activos_disponibles(usuario_a_con_empresa["empresa_id"])
         assert error is None
-        assert resumen == {"cuentas_publicitarias": 1, "paginas": 1, "cuentas_instagram": 1}
+        assert len(disponibles["cuentas_publicitarias"]) == 1
+        assert disponibles["cuentas_publicitarias"][0]["id_externo"] == "act_123456"
+        assert len(disponibles["paginas"]) == 1
+        assert disponibles["paginas"][0]["instagram"]["id_externo"] == "555111"
+
+        assert listar_entidades_empresa(usuario_a_con_empresa["empresa_id"]) == []
+        assert db.session.query(EntidadPublicitaria).count() == 0
+
+
+def test_listar_activos_sin_conexion_devuelve_error_controlado(client, usuario_a_con_empresa):
+    from app.services.meta.cuentas_service import listar_activos_disponibles
+
+    with client.application.app_context():
+        disponibles, error = listar_activos_disponibles(usuario_a_con_empresa["empresa_id"])
+        assert disponibles is None
+        assert error is not None
+
+
+def test_vincular_activos_solo_persiste_lo_seleccionado(client, usuario_a_con_empresa):
+    from app.services.meta.conexiones import crear_conexion
+    from app.services.meta.cuentas_service import listar_entidades_empresa, vincular_activos
+
+    with client.application.app_context():
+        crear_conexion(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "111", "A", "token-a")
+
+        seleccion = [
+            {"tipo": "cuenta_publicitaria", "id_externo": "act_123456", "nombre": "Cuenta Principal", "atributos": {"moneda": "USD"}},
+            {"tipo": "pagina", "id_externo": "987654", "nombre": "Página de prueba", "atributos": {"categoria": "Restaurante"}},
+            {"tipo": "cuenta_instagram", "id_externo": "555111", "id_externo_padre": "987654", "atributos": {}},
+        ]
+        ok, error = vincular_activos(usuario_a_con_empresa["empresa_id"], seleccion)
+        assert ok is True
+        assert error is None
 
         cuentas = listar_entidades_empresa(usuario_a_con_empresa["empresa_id"], tipo="cuenta_publicitaria")
-        assert cuentas[0].id_externo == "act_123456"
+        assert len(cuentas) == 1
         assert cuentas[0].atributos["moneda"] == "USD"
 
         instagram = listar_entidades_empresa(usuario_a_con_empresa["empresa_id"], tipo="cuenta_instagram")
-        assert len(instagram) == 1
         paginas = listar_entidades_empresa(usuario_a_con_empresa["empresa_id"], tipo="pagina")
         assert instagram[0].entidad_padre_id == paginas[0].id
 
 
-def test_descubrir_cuentas_sin_conexion_devuelve_error_controlado(client, usuario_a_con_empresa):
-    from app.services.meta.cuentas_service import descubrir_cuentas
+def test_vincular_activos_desmarcar_desactiva_sin_borrar(client, usuario_a_con_empresa):
+    """Si el usuario vincula una cuenta y luego vuelve a vincular SIN
+    incluirla, debe quedar desactivada (activo=False), nunca borrada."""
+    from app.extensions import db
+    from app.models import EntidadPublicitaria
+    from app.services.meta.conexiones import crear_conexion
+    from app.services.meta.cuentas_service import vincular_activos
 
     with client.application.app_context():
-        resumen, error = descubrir_cuentas(usuario_a_con_empresa["empresa_id"])
-        assert resumen is None
+        crear_conexion(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "111", "A", "token-a")
+
+        vincular_activos(usuario_a_con_empresa["empresa_id"], [
+            {"tipo": "cuenta_publicitaria", "id_externo": "act_1", "nombre": "Uno", "atributos": {}},
+            {"tipo": "cuenta_publicitaria", "id_externo": "act_2", "nombre": "Dos", "atributos": {}},
+        ])
+        vincular_activos(usuario_a_con_empresa["empresa_id"], [
+            {"tipo": "cuenta_publicitaria", "id_externo": "act_1", "nombre": "Uno", "atributos": {}},
+        ])
+
+        todas = db.session.query(EntidadPublicitaria).filter_by(id_externo="act_2").all()
+        assert len(todas) == 1  # la fila sigue existiendo
+        assert todas[0].activo is False
+
+
+def test_vincular_activos_sin_conexion_falla(client, usuario_a_con_empresa):
+    from app.services.meta.cuentas_service import vincular_activos
+
+    with client.application.app_context():
+        ok, error = vincular_activos(usuario_a_con_empresa["empresa_id"], [{"tipo": "cuenta_publicitaria", "id_externo": "act_1", "atributos": {}}])
+        assert ok is False
         assert error is not None

@@ -44,12 +44,16 @@ class MetaClient:
         self.base_url = f"https://graph.facebook.com/{self.version_api}"
 
     def _solicitar(self, metodo, ruta, params=None, data=None, access_token=None):
+        es_url_completa = ruta.startswith("http")
         token = access_token or self.access_token
         params = dict(params or {})
-        if token:
+        if token and not es_url_completa:
+            # Una URL completa (ver get_todas_las_paginas) ya viene con
+            # su propio access_token embebido por Meta -- agregarlo de
+            # nuevo duplicaria el parametro en la query string.
             params["access_token"] = token
 
-        url = ruta if ruta.startswith("http") else f"{self.base_url}/{ruta.lstrip('/')}"
+        url = ruta if es_url_completa else f"{self.base_url}/{ruta.lstrip('/')}"
         try:
             resp = requests.request(metodo, url, params=params, data=data, timeout=TIEMPO_ESPERA_SEGUNDOS)
         except requests.RequestException as exc:
@@ -77,3 +81,24 @@ class MetaClient:
 
     def post(self, ruta, data=None, access_token=None):
         return self._solicitar("POST", ruta, data=data, access_token=access_token)
+
+    def get_todas_las_paginas(self, ruta, params=None, limite_paginas=20):
+        """Sigue `paging.next` (paginacion por cursor de la Graph API,
+        https://developers.facebook.com/docs/graph-api/results) hasta
+        agotar las paginas o `limite_paginas` -- lo que ocurra primero.
+        El limite existe para nunca quedar en un bucle sin fin si Meta
+        devolviera un `next` que apunta a si mismo.
+        """
+        resultados = []
+        respuesta = self.get(ruta, params=params)
+        resultados.extend(respuesta.get("data", []))
+
+        siguiente = respuesta.get("paging", {}).get("next")
+        paginas = 1
+        while siguiente and paginas < limite_paginas:
+            respuesta = self.get(siguiente)
+            resultados.extend(respuesta.get("data", []))
+            siguiente = respuesta.get("paging", {}).get("next")
+            paginas += 1
+
+        return resultados

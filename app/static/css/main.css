@@ -1370,3 +1370,122 @@ body {
   .ps-editor-layout { grid-template-columns: 1fr; }
   .ps-panel-preview { position: static; }
 }
+
+/* Datos de Meta (Paso 2): Conexiones, seleccion de activos, presupuesto. */
+
+.dm-paneles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.dm-panel {
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.dm-form-seleccion {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 640px;
+}
+
+.dm-grupo-seleccion {
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.dm-lista-checks li {
+  background: none;
+  border: none;
+  padding: 4px 0;
+}
+
+.dm-opcion-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dm-campo-periodo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.dm-campo-periodo select,
+.dm-campo-periodo input {
+  padding: 6px 10px;
+  border: 1px solid var(--color-borde);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.dm-lista-presupuestos li {
+  font-size: 14px;
+}
+
+.dm-excedido {
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.dm-form-kpi {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.dm-tabla-scroll {
+  overflow-x: auto;
+  margin-bottom: 24px;
+}
+
+.dm-tabla-kpi {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.dm-tabla-kpi th,
+.dm-tabla-kpi td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.dm-tabla-kpi th {
+  font-weight: 600;
+  color: #374151;
+}
+
+.dm-variacion-positiva {
+  color: #166534;
+  font-weight: 600;
+}
+
+.dm-variacion-negativa {
+  color: #991b1b;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .dm-paneles {
+    grid-template-columns: 1fr;
+  }
+  .dm-campo-periodo {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

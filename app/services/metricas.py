@@ -100,6 +100,82 @@ CATALOGO_INICIAL = [
         "niveles_aplicables": ["cuenta_publicitaria", "campana", "conjunto_anuncios", "anuncio"],
         "categoria": "costo",
     },
+    # --- Paso 3: motor de KPI -- metricas adicionales de Meta Insights ---
+    #
+    # Todas documentadas en https://developers.facebook.com/docs/marketing-api/insights.
+    # "conversiones"/"valor_conversion" se toman especificamente del
+    # action_type "purchase" (el evento de conversion mas comun y sin
+    # ambiguedad de interpretacion); "resultados" en el motor de KPI
+    # (ver app/services/meta/kpi.py) es HOY un alias directo de
+    # "conversiones" -- mapear "resultados" al objetivo real de cada
+    # conjunto de anuncios (ej. leads, instalaciones) es un
+    # refinamiento pendiente, ver informe del Paso 3. Si una cuenta no
+    # tiene compras configuradas, estas metricas quedan en None/"no
+    # disponible" -- nunca se inventan.
+    {
+        "clave": "video_plays", "nombre_mostrado": "Reproducciones de video", "fuente": "meta", "origen": "nativa",
+        "tipo_valor": "conteo", "unidad": None,
+        "descripcion": "Número de reproducciones de video (campo video_play_actions de Meta Insights).",
+        "formula": None,
+        "niveles_aplicables": ["cuenta_publicitaria", "campana", "conjunto_anuncios", "anuncio"],
+        "categoria": "video",
+    },
+    {
+        "clave": "thruplays", "nombre_mostrado": "ThruPlays", "fuente": "meta", "origen": "nativa",
+        "tipo_valor": "conteo", "unidad": None,
+        "descripcion": "Reproducciones completas o de al menos 15 segundos (campo video_thruplay_watched_actions de Meta Insights).",
+        "formula": None,
+        "niveles_aplicables": ["cuenta_publicitaria", "campana", "conjunto_anuncios", "anuncio"],
+        "categoria": "video",
+    },
+    {
+        "clave": "engagement", "nombre_mostrado": "Interacciones (Engagement)", "fuente": "meta", "origen": "nativa",
+        "tipo_valor": "conteo", "unidad": None,
+        "descripcion": "Reacciones, comentarios, veces compartido y clics sobre la publicación (campo inline_post_engagement de Meta Insights).",
+        "formula": None,
+        "niveles_aplicables": ["cuenta_publicitaria", "campana", "conjunto_anuncios", "anuncio"],
+        "categoria": "interaccion",
+    },
+    {
+        "clave": "conversiones", "nombre_mostrado": "Conversiones", "fuente": "meta", "origen": "nativa",
+        "tipo_valor": "conteo", "unidad": None,
+        "descripcion": "Conversiones de tipo compra (campo actions, action_type=\"purchase\", de Meta Insights). Solo disponible si la cuenta tiene el píxel/seguimiento de compras configurado.",
+        "formula": None,
+        "niveles_aplicables": ["cuenta_publicitaria", "campana", "conjunto_anuncios", "anuncio"],
+        "categoria": "conversion",
+    },
+    {
+        "clave": "valor_conversion", "nombre_mostrado": "Valor de conversión", "fuente": "meta", "origen": "nativa",
+        "tipo_valor": "moneda", "unidad": None,
+        "descripcion": "Valor monetario de las conversiones de tipo compra (campo action_values, action_type=\"purchase\").",
+        "formula": None,
+        "niveles_aplicables": ["cuenta_publicitaria", "campana", "conjunto_anuncios", "anuncio"],
+        "categoria": "conversion",
+    },
+    {
+        "clave": "roas", "nombre_mostrado": "ROAS", "fuente": "meta", "origen": "nativa",
+        "tipo_valor": "ratio", "unidad": None,
+        "descripcion": "Retorno sobre la inversión publicitaria, tal como lo calcula Meta (campo purchase_roas de Meta Insights).",
+        "formula": None,
+        "niveles_aplicables": ["cuenta_publicitaria", "campana", "conjunto_anuncios", "anuncio"],
+        "categoria": "conversion",
+    },
+    {
+        "clave": "costo_por_resultado", "nombre_mostrado": "Costo por resultado", "fuente": "meta", "origen": "calculada",
+        "tipo_valor": "moneda", "unidad": None,
+        "descripcion": "Inversión dividida entre conversiones (CPA). \"Resultado\" se interpreta hoy como conversión de tipo compra.",
+        "formula": "spend / conversiones",
+        "niveles_aplicables": ["cuenta_publicitaria", "campana", "conjunto_anuncios", "anuncio"],
+        "categoria": "costo",
+    },
+    {
+        "clave": "tasa_conversion", "nombre_mostrado": "Tasa de conversión", "fuente": "meta", "origen": "calculada",
+        "tipo_valor": "porcentaje", "unidad": "%",
+        "descripcion": "Porcentaje de clics que resultaron en una conversión de tipo compra.",
+        "formula": "conversiones / clicks * 100",
+        "niveles_aplicables": ["cuenta_publicitaria", "campana", "conjunto_anuncios", "anuncio"],
+        "categoria": "conversion",
+    },
 ]
 
 # Formulas de las metricas calculadas del catalogo inicial, como
@@ -111,6 +187,8 @@ _CALCULADORAS = {
     "ctr": lambda v: (v["clicks"] / v["impressions"] * 100) if v.get("impressions") else None,
     "cpc": lambda v: (v["spend"] / v["clicks"]) if v.get("clicks") else None,
     "cpm": lambda v: (v["spend"] / v["impressions"] * 1000) if v.get("impressions") else None,
+    "costo_por_resultado": lambda v: (v["spend"] / v["conversiones"]) if v.get("conversiones") and v.get("spend") is not None else None,
+    "tasa_conversion": lambda v: (v["conversiones"] / v["clicks"] * 100) if v.get("clicks") and v.get("conversiones") is not None else None,
 }
 
 
@@ -200,11 +278,21 @@ def registrar_metricas_nativas_y_calculadas(empresa_id, entidad_id, entidad_tipo
     de ctr/cpc/cpm que la fuente haya entregado directamente, para que
     "calculada" signifique siempre "calculada por Publi Marketing".
     """
+    # Meta devuelve los valores de Insights como strings (ej.
+    # {"spend": "12.50"}) -- se convierten a float UNA sola vez aqui,
+    # antes de guardar y antes de pasarlos a _CALCULADORAS. Pasar el
+    # dict de strings sin convertir directamente a una formula como
+    # "spend / clicks" lanza TypeError (str / str no es valido en
+    # Python), que el except de abajo atrapa en silencio -- es decir,
+    # ctr/cpc/cpm nunca se guardarian con datos reales de Meta. Este es
+    # el motivo por el que la conversion ocurre antes de ambos usos.
+    valores_nativos = {clave: (float(valor) if valor is not None else None) for clave, valor in valores_nativos.items()}
+
     guardadas = []
     for clave, valor in valores_nativos.items():
         if valor is None:
             continue
-        guardadas.append(registrar_metrica(empresa_id, clave, float(valor), fecha, entidad_id=entidad_id, entidad_tipo=entidad_tipo, **kwargs))
+        guardadas.append(registrar_metrica(empresa_id, clave, valor, fecha, entidad_id=entidad_id, entidad_tipo=entidad_tipo, **kwargs))
 
     for clave, calculadora in _CALCULADORAS.items():
         try:
@@ -215,6 +303,23 @@ def registrar_metricas_nativas_y_calculadas(empresa_id, entidad_id, entidad_tipo
             guardadas.append(registrar_metrica(empresa_id, clave, derivado, fecha, entidad_id=entidad_id, entidad_tipo=entidad_tipo, **kwargs))
 
     return guardadas
+
+
+def reemplazar_metricas_del_dia(empresa_id, entidad_id, fecha, fuente="meta"):
+    """Borra las filas de Metrica de esta entidad/fecha/fuente antes de
+    volver a registrarlas (Paso 2: sincronizacion incremental). Meta
+    puede corregir el spend/impresiones de un dia varios dias despues
+    (ventanas de atribucion) -- una nueva sincronizacion debe
+    REEMPLAZAR el valor de ese dia, no acumular una fila duplicada por
+    cada vez que se sincroniza. El historico real (una fila por dia,
+    dias distintos) no se pierde: esto solo afecta al mismo dia exacto.
+    """
+    from app.extensions import db
+    from app.models import Metrica
+
+    db.session.query(Metrica).filter_by(
+        empresa_id=empresa_id, entidad_id=entidad_id, fecha=fecha, fuente=fuente
+    ).delete()
 
 
 def consultar_metricas(empresa_id, entidad_id=None, entidad_tipo=None, metrica_nombre=None, fecha_desde=None, fecha_hasta=None):

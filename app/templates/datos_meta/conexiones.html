@@ -8,7 +8,7 @@
   </div>
 </div>
 
-{% if not meta_configurado %}
+{% if not conexion and not meta_configurado %}
 <div class="estado-vacio">
   <p><strong>Meta no está configurado en este entorno.</strong></p>
   <p class="perfil-nota">Faltan las variables de entorno META_APP_ID / META_APP_SECRET / META_REDIRECT_URI. Configúralas para poder conectar una cuenta de Meta.</p>
@@ -19,33 +19,90 @@
   <a href="{{ url_for('datos_meta.conectar') }}" class="boton-primario">Conectar Meta</a>
 </div>
 {% else %}
-<dl class="perfil-datos">
-  <dt>Empresa</dt>
-  <dd>{{ empresa_activa.nombre }}</dd>
-  <dt>Conectado como</dt>
-  <dd>{{ conexion.nombre_usuario_meta or "—" }} (id {{ conexion.meta_user_id }})</dd>
-  <dt>Estado</dt>
-  <dd>
-    <span class="estado-badge estado-badge-{{ conexion.estado }}">{{ conexion.estado }}</span>
-    {% if conexion.estado == "error" and conexion.ultimo_error %}
-    <span class="perfil-nota">— {{ conexion.ultimo_error }}</span>
+{# Una conexion ya existente siempre se muestra, incluso si
+   meta_configurado() es False ahora mismo (ej. las variables de
+   entorno se quitaron despues de conectar) -- lo unico que eso
+   deberia impedir es CREAR una conexion nueva, nunca ocultar los
+   datos de una que ya existe. #}
+<div class="dm-paneles">
+  <section class="dm-panel">
+    <h2 class="ps-seccion-titulo">Estado de la conexión</h2>
+    <dl class="perfil-datos">
+      <dt>Empresa</dt>
+      <dd>{{ empresa_activa.nombre }}</dd>
+      <dt>Conectado como</dt>
+      <dd>{{ conexion.nombre_usuario_meta or "—" }} (id {{ conexion.meta_user_id }})</dd>
+      <dt>Estado</dt>
+      <dd>
+        <span class="estado-badge estado-badge-{{ conexion.estado }}">{{ conexion.estado }}</span>
+        {% if conexion.estado == "error" and conexion.ultimo_error %}
+        <span class="perfil-nota">— {{ conexion.ultimo_error }}</span>
+        {% endif %}
+      </dd>
+      <dt>Permisos concedidos</dt>
+      <dd>{{ conexion.scopes_concedidos or "—" }}</dd>
+      <dt>Token vence</dt>
+      <dd>{{ conexion.token_expira_en.strftime("%d/%m/%Y") if conexion.token_expira_en else "—" }}</dd>
+      <dt>Último uso</dt>
+      <dd>{{ conexion.ultimo_uso_en.strftime("%d/%m/%Y %H:%M") if conexion.ultimo_uso_en else "—" }}</dd>
+    </dl>
+    <div class="cabecera-seccion">
+      <a href="{{ url_for('datos_meta.seleccionar_activos') }}" class="boton-enlace">Elegir activos vinculados</a>
+      <a href="{{ url_for('datos_meta.kpi_prueba') }}" class="boton-enlace">Prueba de KPI</a>
+      <button type="button" id="boton-desconectar" class="boton-enlace" data-conexion-id="{{ conexion.id }}">Desconectar</button>
+    </div>
+  </section>
+
+  <section class="dm-panel">
+    <h2 class="ps-seccion-titulo">Sincronización</h2>
+    {% if ultima_sincronizacion %}
+    <dl class="perfil-datos">
+      <dt>Última sincronización</dt>
+      <dd>{{ ultima_sincronizacion.creado_en.strftime("%d/%m/%Y %H:%M") }}</dd>
+      <dt>Estado</dt>
+      <dd>
+        <span class="estado-badge estado-badge-{{ 'activa' if ultima_sincronizacion.estado == 'completada' else ultima_sincronizacion.estado }}">
+          {{ ultima_sincronizacion.estado.replace("_", " ") }}
+        </span>
+      </dd>
+      {% if ultima_sincronizacion.estado == "completada" %}
+      <dt>Datos actualizados</dt>
+      <dd>{{ conteos_estructura.get("campana", 0) }} campañas · {{ conteos_estructura.get("conjunto_anuncios", 0) }} conjuntos · {{ conteos_estructura.get("anuncio", 0) }} anuncios · {{ ultima_sincronizacion.registros_procesados }} registros</dd>
+      {% elif ultima_sincronizacion.estado == "error" %}
+      <dt>Error de sincronización</dt>
+      <dd>
+        {{ ultima_sincronizacion.error_mensaje }}
+        {% if ultima_sincronizacion.intentos < max_intentos %}
+        <button type="button" id="boton-reintentar" class="boton-enlace" data-sincronizacion-id="{{ ultima_sincronizacion.id }}">Reintentar</button>
+        {% else %}
+        <span class="perfil-nota">(máximo de {{ max_intentos }} intentos alcanzado)</span>
+        {% endif %}
+      </dd>
+      {% endif %}
+    </dl>
+    {% else %}
+    <p class="perfil-nota">Todavía no se ha sincronizado ninguna vez.</p>
     {% endif %}
-  </dd>
-  <dt>Permisos concedidos</dt>
-  <dd>{{ conexion.scopes_concedidos or "—" }}</dd>
-  <dt>Token vence</dt>
-  <dd>{{ conexion.token_expira_en.strftime("%d/%m/%Y") if conexion.token_expira_en else "—" }}</dd>
-  <dt>Última sincronización</dt>
-  <dd>{{ conexion.ultima_sincronizacion_en.strftime("%d/%m/%Y %H:%M") if conexion.ultima_sincronizacion_en else "Todavía no sincronizada" }}</dd>
-</dl>
 
-<div class="cabecera-seccion">
-  <button type="button" id="boton-sincronizar" class="boton-primario">Sincronizar ahora</button>
-  <button type="button" id="boton-desconectar" class="boton-enlace" data-conexion-id="{{ conexion.id }}">Desconectar</button>
+    <label class="dm-campo-periodo">
+      Período a sincronizar
+      <select id="sincronizar-periodo">
+        {% for p in periodos %}
+        <option value="{{ p }}" {% if p == "ultimos_30_dias" %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div id="sincronizar-personalizado" class="dm-campo-periodo" hidden>
+      <label>Desde <input type="date" id="sincronizar-fecha-inicio" /></label>
+      <label>Hasta <input type="date" id="sincronizar-fecha-fin" /></label>
+    </div>
+
+    <button type="button" id="boton-sincronizar" class="boton-primario">Sincronizar ahora</button>
+    <p id="sincronizar-mensaje" class="perfil-nota" hidden></p>
+  </section>
 </div>
-<p id="sincronizar-mensaje" class="perfil-nota" hidden></p>
 
-<h2 class="ps-seccion-titulo">Cuentas publicitarias</h2>
+<h2 class="ps-seccion-titulo">Cuentas publicitarias vinculadas</h2>
 {% if entidades_por_tipo.cuenta_publicitaria %}
 <ul class="lista-simple">
   {% for cuenta in entidades_por_tipo.cuenta_publicitaria %}
@@ -53,7 +110,7 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="perfil-nota">Ninguna todavía. Usa "Sincronizar ahora" para descubrirlas.</p>
+<p class="perfil-nota">Ninguna vinculada todavía. <a href="{{ url_for('datos_meta.seleccionar_activos') }}">Elegir activos</a>.</p>
 {% endif %}
 
 <h2 class="ps-seccion-titulo">Páginas de Facebook</h2>
@@ -64,7 +121,7 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="perfil-nota">Ninguna todavía.</p>
+<p class="perfil-nota">Ninguna vinculada todavía.</p>
 {% endif %}
 
 <h2 class="ps-seccion-titulo">Cuentas de Instagram</h2>
@@ -75,8 +132,52 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="perfil-nota">Ninguna todavía.</p>
+<p class="perfil-nota">Ninguna vinculada todavía.</p>
 {% endif %}
+
+<h2 class="ps-seccion-titulo">Presupuesto de pauta</h2>
+{% if presupuestos %}
+<ul class="lista-simple dm-lista-presupuestos">
+  {% for r in presupuestos %}
+  <li>
+    <strong>{{ r.presupuesto.nombre }}</strong>
+    <span class="perfil-nota">({{ "Estratégico" if r.presupuesto.tipo == "estrategico" else "Asignado" }})</span>
+    — {{ r.presupuesto.monto }} {{ r.presupuesto.moneda }} ·
+    gasto real: {{ r.gasto_real }} {{ r.presupuesto.moneda }} ·
+    disponible:
+    <span class="{{ 'dm-excedido' if r.excedido else '' }}">{{ r.disponible }} {{ r.presupuesto.moneda }}</span>
+    {% if r.porcentaje_usado is not none %}({{ r.porcentaje_usado }}% usado){% endif %}
+    <button type="button" class="boton-enlace dm-boton-eliminar-presupuesto" data-presupuesto-id="{{ r.presupuesto.id }}">Eliminar</button>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="perfil-nota">Ningún presupuesto de pauta definido todavía.</p>
+{% endif %}
+
+<form id="form-presupuesto" class="formulario-simple">
+  <label>Nombre <input type="text" name="nombre" placeholder="Presupuesto mensual" required /></label>
+  <label>
+    Tipo
+    <select name="tipo">
+      <option value="estrategico">Estratégico (capital general)</option>
+      <option value="asignado">Asignado (a una campaña/conjunto)</option>
+    </select>
+  </label>
+  <label>Monto <input type="number" name="monto" min="0" step="0.01" required /></label>
+  <label>Moneda <input type="text" name="moneda" value="CRC" maxlength="10" /></label>
+  <label>
+    Período
+    <select name="periodo_tipo">
+      <option value="mensual">Mensual (se calcula sobre el mes en curso)</option>
+      <option value="unico">Único</option>
+      <option value="personalizado">Personalizado</option>
+    </select>
+  </label>
+  <label>Objetivo <input type="text" name="objetivo" placeholder="conversiones" /></label>
+  <button type="submit" class="boton-primario">Agregar presupuesto</button>
+  <p id="presupuesto-mensaje" class="perfil-nota" hidden></p>
+</form>
 {% endif %}
 
 {% if historial|length > 1 %}
@@ -91,6 +192,9 @@
 <script>
   window.DM_SINCRONIZAR_URL = "{{ url_for('datos_meta.conexiones_sincronizar') }}";
   window.DM_DESCONECTAR_URL_BASE = "{{ url_for('datos_meta.conexion_desconectar', conexion_id=0) }}".replace("/0/", "/__ID__/");
+  window.DM_REINTENTAR_URL_BASE = "{{ url_for('datos_meta.conexiones_reintentar', sincronizacion_id=0) }}".replace("/0/", "/__ID__/");
+  window.DM_PRESUPUESTO_CREAR_URL = "{{ url_for('datos_meta.conexiones_crear_presupuesto') }}";
+  window.DM_PRESUPUESTO_ELIMINAR_URL_BASE = "{{ url_for('datos_meta.conexiones_eliminar_presupuesto', presupuesto_id=0) }}".replace("/0/", "/__ID__/");
 </script>
 <script src="{{ url_for('static', filename='js/datos_meta_conexiones.js') }}"></script>
 {% endblock %}

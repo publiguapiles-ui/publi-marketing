@@ -123,11 +123,25 @@ def obtener_cliente_para_empresa(empresa_id):
     return MetaClient(access_token=token), None
 
 
-def marcar_error(conexion, mensaje):
+# Categorias de error (ver app/services/meta/errores.py) que invalidan
+# la conexion EN SI -- el token ya no sirve, hay que reconectar. Un
+# error transitorio (limite de API, activo inexistente, error interno
+# de Meta) no significa que el token este mal: la conexion sigue
+# "activa" y el usuario puede simplemente reintentar la sincronizacion.
+CATEGORIAS_QUE_INVALIDAN_CONEXION = ("token_expirado", "autenticacion")
+
+
+def marcar_error(conexion, mensaje, categoria=None):
+    """Registra `ultimo_error` siempre. Solo cambia `estado` a "error"
+    (y por lo tanto deja de ser "la" conexion activa, ver
+    obtener_conexion_activa) si la categoria del error indica que el
+    TOKEN en si ya no sirve -- nunca por un error transitorio de una
+    sola llamada."""
     from app.extensions import db
 
-    conexion.estado = "error"
     conexion.ultimo_error = (mensaje or "")[:500]
+    if categoria in CATEGORIAS_QUE_INVALIDAN_CONEXION:
+        conexion.estado = "error"
     db.session.commit()
     return conexion
 
