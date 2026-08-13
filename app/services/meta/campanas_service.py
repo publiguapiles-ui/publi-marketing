@@ -129,4 +129,4 @@ def sincronizar_estructura(empresa_id):
         db.session.rollback()
         categoria = clasificar_error_meta(exc)
         marcar_error(conexion, str(exc), categoria=categoria)
-        return None, mensaje_para_usuario(categoria)
+        return None, mensaje_para_usuario(categoria, exc)

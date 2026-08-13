@@ -128,6 +128,65 @@ def test_mensaje_para_usuario_nunca_expone_detalles_internos():
     assert "reconectar" in mensaje.lower()
 
 
+# --- Uso real de la cuota de Meta (headers x-*-usage) ---------------------------------
+
+def test_extraer_uso_meta_lee_headers_documentados():
+    from app.services.meta.client import _extraer_uso_meta
+
+    class _RespuestaFalsa:
+        headers = {
+            "x-ad-account-usage": '{"acc_id_util_pct": 97.5}',
+            "x-app-usage": '{"call_count": 40, "total_cputime": 10, "total_time": 12}',
+        }
+
+    uso = _extraer_uso_meta(_RespuestaFalsa())
+    assert uso["cuenta_publicitaria"]["acc_id_util_pct"] == 97.5
+    assert uso["app"]["call_count"] == 40
+
+
+def test_extraer_uso_meta_devuelve_none_sin_headers():
+    from app.services.meta.client import _extraer_uso_meta
+
+    class _RespuestaFalsa:
+        headers = {}
+
+    assert _extraer_uso_meta(_RespuestaFalsa()) is None
+
+
+def test_mensaje_para_usuario_incluye_porcentaje_real_de_cuenta_publicitaria():
+    from app.services.meta.client import MetaAPIError
+    from app.services.meta.errores import mensaje_para_usuario
+
+    exc = MetaAPIError("Rate limit", codigo=613, uso_meta={"cuenta_publicitaria": {"acc_id_util_pct": 100}})
+    mensaje = mensaje_para_usuario("limite_api", exc)
+    assert "100%" in mensaje
+
+
+def test_mensaje_para_usuario_incluye_estimacion_de_business_use_case():
+    from app.services.meta.client import MetaAPIError
+    from app.services.meta.errores import mensaje_para_usuario
+
+    uso = {"business_use_case": {"123": [{"type": "ads_management", "estimated_time_to_regain_access": 45}]}}
+    exc = MetaAPIError("Rate limit", codigo=613, uso_meta=uso)
+    mensaje = mensaje_para_usuario("limite_api", exc)
+    assert "45 minutos" in mensaje
+
+
+def test_mensaje_para_usuario_sin_uso_meta_no_inventa_numeros():
+    from app.services.meta.client import MetaAPIError
+    from app.services.meta.errores import mensaje_para_usuario
+
+    exc = MetaAPIError("Rate limit", codigo=613, uso_meta=None)
+    mensaje = mensaje_para_usuario("limite_api", exc)
+    assert mensaje == "Se alcanzó el límite de solicitudes de Meta. Intenta de nuevo en unos minutos."
+
+
+def test_mensaje_para_usuario_sigue_funcionando_sin_excepcion():
+    from app.services.meta.errores import mensaje_para_usuario
+
+    assert mensaje_para_usuario("limite_api") == "Se alcanzó el límite de solicitudes de Meta. Intenta de nuevo en unos minutos."
+
+
 # --- Sincronizacion de estructura (campanas/conjuntos/anuncios) -----------------
 
 def _preparar_cuenta_vinculada(empresa_id, usuario_id):

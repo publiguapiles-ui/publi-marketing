@@ -8,11 +8,41 @@ graph.facebook.com -- todo lo demas (auth_service, cuentas_service,
 futuro insights_service) pasa por aqui.
 """
 
+import json
 import os
 
 import requests
 
 TIEMPO_ESPERA_SEGUNDOS = 15
+
+# Headers documentados por Meta para reportar cuanto de la cuota de
+# solicitudes ya se consumio (https://developers.facebook.com/docs/
+# graph-api/overview/rate-limiting) -- Meta no los envia siempre (depende
+# del endpoint/version), asi que _extraer_uso_meta() nunca asume que van
+# a estar presentes.
+_HEADERS_USO_META = {
+    "x-app-usage": "app",
+    "x-ad-account-usage": "cuenta_publicitaria",
+    "x-page-usage": "pagina",
+    "x-business-use-case-usage": "business_use_case",
+}
+
+
+def _extraer_uso_meta(resp):
+    """Devuelve {"app": {...}, "cuenta_publicitaria": {...}, ...} con lo
+    que Meta realmente reporto sobre el uso de la cuota de solicitudes
+    en ESTA respuesta -- nunca un valor inventado ni estimado por
+    nosotros. None si Meta no mando ninguno de estos headers."""
+    uso = {}
+    for nombre_header, clave in _HEADERS_USO_META.items():
+        valor = resp.headers.get(nombre_header)
+        if not valor:
+            continue
+        try:
+            uso[clave] = json.loads(valor)
+        except ValueError:
+            continue
+    return uso or None
 
 
 class MetaAPIError(RuntimeError):
@@ -20,11 +50,16 @@ class MetaAPIError(RuntimeError):
     red/HTTP generico -- ver MetaClient._solicitar, que distingue
     ambos casos)."""
 
-    def __init__(self, mensaje, codigo=None, tipo=None, subcodigo=None):
+    def __init__(self, mensaje, codigo=None, tipo=None, subcodigo=None, uso_meta=None):
         super().__init__(mensaje)
         self.codigo = codigo
         self.tipo = tipo
         self.subcodigo = subcodigo
+        # Ver _extraer_uso_meta -- solo presente si Meta lo reporto en la
+        # respuesta que produjo este error (tipicamente utilizado por
+        # errores.py para explicar un "limite_api" con datos reales en
+        # vez de un mensaje generico).
+        self.uso_meta = uso_meta
 
 
 def _version_api():
@@ -73,6 +108,7 @@ class MetaClient:
                 codigo=error.get("code"),
                 tipo=error.get("type"),
                 subcodigo=error.get("error_subcode"),
+                uso_meta=_extraer_uso_meta(resp),
             )
         return cuerpo
 

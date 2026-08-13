@@ -160,7 +160,7 @@ def sincronizar_insights(empresa_id, fecha_inicio, fecha_fin, niveles=None, sinc
         db.session.rollback()
         categoria = clasificar_error_meta(exc)
         marcar_error(conexion, str(exc), categoria=categoria)
-        return None, mensaje_para_usuario(categoria)
+        return None, mensaje_para_usuario(categoria, exc)
 
 
 def _json_compacto(d):

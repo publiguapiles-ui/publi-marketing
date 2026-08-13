@@ -74,5 +74,55 @@ def clasificar_error_meta(excepcion):
     return "interno"
 
 
-def mensaje_para_usuario(categoria):
-    return MENSAJES_CATEGORIA.get(categoria, MENSAJES_CATEGORIA["interno"])
+def mensaje_para_usuario(categoria, excepcion=None):
+    """`excepcion` es opcional -- si es un MetaAPIError con `uso_meta`
+    (ver client.py::_extraer_uso_meta), se le agrega al mensaje generico
+    el porcentaje/tiempo de espera REAL que Meta reporto en la
+    respuesta, en vez de dejar solo "intenta de nuevo en unos minutos"
+    a ciegas. Nunca inventa un numero: si Meta no lo mando, no se
+    muestra."""
+    mensaje = MENSAJES_CATEGORIA.get(categoria, MENSAJES_CATEGORIA["interno"])
+    if categoria == "limite_api" and excepcion is not None:
+        detalle = _detalle_uso_meta(getattr(excepcion, "uso_meta", None))
+        if detalle:
+            mensaje = f"{mensaje} {detalle}"
+    return mensaje
+
+
+def _detalle_uso_meta(uso_meta):
+    """Traduce el dict de _extraer_uso_meta a una frase corta y honesta
+    sobre la cuota real. Prioriza la cuenta publicitaria (la que
+    realmente usa insights_service.py) sobre el app/pagina, y el
+    "estimated_time_to_regain_access" de business_use_case_usage cuando
+    esta disponible (es el unico campo que Meta documenta con un tiempo
+    de espera real, en minutos)."""
+    if not uso_meta:
+        return None
+
+    partes = []
+
+    cuenta = uso_meta.get("cuenta_publicitaria")
+    if isinstance(cuenta, dict) and "acc_id_util_pct" in cuenta:
+        partes.append(f"Cuenta publicitaria: {cuenta['acc_id_util_pct']}% de la cuota usada.")
+
+    business = uso_meta.get("business_use_case")
+    if isinstance(business, dict):
+        for entradas in business.values():
+            if not isinstance(entradas, list):
+                continue
+            for entrada in entradas:
+                espera = entrada.get("estimated_time_to_regain_access")
+                if espera is not None:
+                    partes.append(f"Meta estima {espera} minutos para recuperar acceso.")
+                    break
+            if partes:
+                break
+
+    if not partes:
+        app = uso_meta.get("app")
+        if isinstance(app, dict):
+            maximo = max((v for v in app.values() if isinstance(v, (int, float))), default=None)
+            if maximo is not None:
+                partes.append(f"App: {maximo}% de la cuota usada.")
+
+    return " ".join(partes) or None

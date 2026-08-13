@@ -81,7 +81,7 @@ def listar_activos_disponibles(empresa_id):
         marcar_error(conexion, str(exc), categoria=categoria)
         from app.services.meta.errores import mensaje_para_usuario
 
-        return None, mensaje_para_usuario(categoria)
+        return None, mensaje_para_usuario(categoria, exc)
 
 
 def _upsert_entidad(empresa_id, conexion_id, tipo, id_externo, nombre, estado, atributos, entidad_padre_id=None, activo=True):
