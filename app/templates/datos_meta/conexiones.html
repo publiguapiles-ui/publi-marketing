@@ -23,7 +23,21 @@
    meta_configurado() es False ahora mismo (ej. las variables de
    entorno se quitaron despues de conectar) -- lo unico que eso
    deberia impedir es CREAR una conexion nueva, nunca ocultar los
-   datos de una que ya existe. #}
+   datos de una que ya existe. Idem si la conexion mas reciente ya no
+   esta "activa" (token expirado/revocado/error de permisos): se
+   siguen mostrando sus datos, pero con un aviso claro de reconexion
+   (Paso 6, punto 10). #}
+{% if not conexion_activa %}
+<div class="estado-vacio">
+  <p><strong>La conexión con Meta de {{ empresa_activa.nombre }} no está activa</strong> ({{ conexion.estado }}).</p>
+  {% if conexion.ultimo_error %}<p class="perfil-nota">{{ conexion.ultimo_error }}</p>{% endif %}
+  {% if meta_configurado %}
+  <a href="{{ url_for('datos_meta.conectar') }}" class="boton-primario">Reconectar Meta</a>
+  {% else %}
+  <p class="perfil-nota">Meta no está configurado en este entorno (faltan META_APP_ID / META_APP_SECRET / META_REDIRECT_URI) -- no se puede reconectar hasta configurarlas.</p>
+  {% endif %}
+</div>
+{% endif %}
 <div class="dm-paneles">
   <section class="dm-panel">
     <h2 class="ps-seccion-titulo">Estado de la conexión</h2>
@@ -35,7 +49,7 @@
       <dt>Estado</dt>
       <dd>
         <span class="estado-badge estado-badge-{{ conexion.estado }}">{{ conexion.estado }}</span>
-        {% if conexion.estado == "error" and conexion.ultimo_error %}
+        {% if conexion.estado != "activa" and conexion.ultimo_error %}
         <span class="perfil-nota">— {{ conexion.ultimo_error }}</span>
         {% endif %}
       </dd>
@@ -47,15 +61,18 @@
       <dd>{{ conexion.ultimo_uso_en.strftime("%d/%m/%Y %H:%M") if conexion.ultimo_uso_en else "—" }}</dd>
     </dl>
     <div class="cabecera-seccion">
+      {% if conexion_activa %}
       <a href="{{ url_for('datos_meta.seleccionar_activos') }}" class="boton-enlace">Elegir activos vinculados</a>
       <a href="{{ url_for('datos_meta.dashboard') }}" class="boton-enlace">Dashboard</a>
       <a href="{{ url_for('datos_meta.campanas_lista') }}" class="boton-enlace">Campañas</a>
       <a href="{{ url_for('datos_meta.audiencias') }}" class="boton-enlace">Audiencias</a>
       <a href="{{ url_for('datos_meta.kpi_prueba') }}" class="boton-enlace">Prueba de KPI</a>
       <button type="button" id="boton-desconectar" class="boton-enlace" data-conexion-id="{{ conexion.id }}">Desconectar</button>
+      {% endif %}
     </div>
   </section>
 
+  {% if conexion_activa %}
   <section class="dm-panel">
     <h2 class="ps-seccion-titulo">Sincronización</h2>
     {% if ultima_sincronizacion %}
@@ -103,6 +120,7 @@
     <button type="button" id="boton-sincronizar" class="boton-primario">Sincronizar ahora</button>
     <p id="sincronizar-mensaje" class="perfil-nota" hidden></p>
   </section>
+  {% endif %}
 </div>
 
 <h2 class="ps-seccion-titulo">Cuentas publicitarias vinculadas</h2>

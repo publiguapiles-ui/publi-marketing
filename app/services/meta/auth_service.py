@@ -17,11 +17,20 @@ from app.services.meta.client import MetaClient, _version_api
 # `ads_management` (crear/pausar campanas) se agrega deliberadamente
 # despues, cuando exista esa funcionalidad -- pedir permisos que
 # todavia no se usan es una mala practica frente a Meta App Review.
+#
+# "instagram_basic" quedo fuera (Paso 6, verificacion real): Meta
+# rechazo el dialogo de OAuth completo con "Invalid Scopes:
+# instagram_basic" para la app real creada en este paso, aunque la
+# documentacion publica todavia lo lista como vigente -- probablemente
+# porque a esta app le falta agregar el producto "Instagram" en el
+# panel de Meta for Developers. Sacarlo de la lista predeterminada no
+# es una decision de diseño, es la unica forma de que ads_read/
+# pages_show_list (el requisito central de este paso) funcionen hoy;
+# ver informe del Paso 6, pendientes.
 SCOPES_PREDETERMINADOS = [
     "ads_read",
     "pages_show_list",
     "pages_read_engagement",
-    "instagram_basic",
     "business_management",
 ]
 

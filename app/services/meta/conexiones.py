@@ -31,6 +31,27 @@ def obtener_conexion_activa(empresa_id):
     )
 
 
+def obtener_conexion_mas_reciente(empresa_id):
+    """La conexion mas reciente de esta empresa SIN IMPORTAR su estado
+    (activa, error o revocada) -- a diferencia de
+    obtener_conexion_activa(), esta funcion es para MOSTRAR en pantalla
+    por que una conexion dejo de funcionar (token expirado, revocado,
+    error de permisos...), nunca para obtener un MetaClient utilizable.
+    Para eso siempre obtener_conexion_activa()/obtener_cliente_para_empresa()
+    (Paso 6, punto 10: sin esto, una conexion vencida desaparecia de la
+    pantalla de Conexiones y se mostraba como "nunca conectado", en vez
+    de "tu conexion expiro, reconecta")."""
+    from app.extensions import db
+    from app.models import MetaConexion
+
+    return (
+        db.session.query(MetaConexion)
+        .filter_by(empresa_id=empresa_id)
+        .order_by(MetaConexion.creado_en.desc())
+        .first()
+    )
+
+
 def obtener_conexion(empresa_id, conexion_id):
     """Como obtener_conexion_activa, pero por id -- para acciones sobre
     una conexion especifica (desconectar), siempre revalidando que
@@ -108,12 +129,33 @@ def obtener_cliente_para_empresa(empresa_id):
     utilizable. Pensado para que services/meta/cuentas_service.py (y
     el futuro insights_service.py) nunca tengan que lidiar con
     conexiones/tokens/cifrado directamente.
+
+    Paso 6, punto 10: la expiracion se detecta AQUI, de forma
+    proactiva, comparando `token_expira_en` contra la hora actual --
+    antes de esto, un token vencido solo se detectaba de forma
+    reactiva cuando Meta respondia con un error 190 durante una
+    sincronizacion real (desperdiciando esa llamada y tardando un ciclo
+    completo en avisarle al usuario). El resultado final es el mismo
+    (categoria "token_expirado", la conexion pasa a estado "error"),
+    pero ahora se sabe sin necesidad de llamar a la Graph API.
     """
     from app.services.meta.client import MetaClient
 
     conexion = obtener_conexion_activa(empresa_id)
     if conexion is None:
         return None, "Esta empresa no tiene Meta conectado."
+
+    # `token_expira_en` se guarda en una columna DateTime SIN timezone
+    # (igual que el resto del modelo, ver meta_conexion.py) -- tanto
+    # SQLite como Postgres devuelven un datetime NAIVE al leerla, que
+    # representa UTC implicitamente. Comparar contra
+    # datetime.now(timezone.utc) (aware) lanza TypeError, asi que se le
+    # quita el tzinfo despues de obtenerlo (evita datetime.utcnow(),
+    # deprecado) para que ambos lados sean naive-UTC consistentes.
+    ahora_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+    if conexion.token_expira_en is not None and conexion.token_expira_en <= ahora_utc_naive:
+        marcar_error(conexion, "El token de acceso expiró.", categoria="token_expirado")
+        return None, "El token de la conexión con Meta expiró. Reconecta la cuenta."
 
     token = obtener_token_descifrado(conexion)
     if token is None:

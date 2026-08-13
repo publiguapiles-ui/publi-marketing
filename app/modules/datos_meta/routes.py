@@ -32,6 +32,7 @@ from app.services.meta.conexiones import (
     desconectar,
     listar_conexiones_empresa,
     obtener_conexion_activa,
+    obtener_conexion_mas_reciente,
 )
 from app.services.meta.cuentas_service import (
     listar_activos_disponibles,
@@ -86,7 +87,17 @@ def index():
 def conexiones():
     empresa, _rol = _empresa_activa_o_404()
 
-    conexion = obtener_conexion_activa(empresa.id)
+    # Paso 6, punto 10: se muestra la conexion mas RECIENTE (activa,
+    # con error o revocada), no solo la activa -- de lo contrario una
+    # conexion expirada/revocada desaparece de la pantalla y se
+    # confunde con "nunca se conecto Meta".
+    conexion = obtener_conexion_mas_reciente(empresa.id)
+    conexion_activa = conexion is not None and conexion.estado == "activa"
+
+    # Lectura pura de lo YA sincronizado (sin llamar a Meta) -- se
+    # muestra siempre que exista una conexion, activa o no, porque
+    # estos activos siguen siendo datos reales aunque el token haya
+    # expirado despues de sincronizarlos.
     entidades_por_tipo = {}
     conteos_estructura = {}
     if conexion is not None:
@@ -101,12 +112,13 @@ def conexiones():
         "datos_meta/conexiones.html",
         empresa_activa=empresa,
         conexion=conexion,
+        conexion_activa=conexion_activa,
         entidades_por_tipo=entidades_por_tipo,
         conteos_estructura=conteos_estructura,
         meta_configurado=meta_configurado(),
         historial=listar_conexiones_empresa(empresa.id),
-        ultima_sincronizacion=obtener_ultima_sincronizacion(empresa.id) if conexion else None,
-        sincronizaciones=listar_sincronizaciones_empresa(empresa.id) if conexion else [],
+        ultima_sincronizacion=obtener_ultima_sincronizacion(empresa.id) if conexion_activa else None,
+        sincronizaciones=listar_sincronizaciones_empresa(empresa.id) if conexion_activa else [],
         max_intentos=MAX_INTENTOS,
         periodos=PERIODOS_PREDEFINIDOS,
         etiquetas_periodos=ETIQUETAS_PERIODOS,
