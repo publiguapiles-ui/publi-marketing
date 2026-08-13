@@ -520,3 +520,197 @@ def test_vista_previa_con_parametros_incompletos_no_falla(client, usuario_a_con_
     )
     assert resp.status_code == 200
     assert resp.mimetype == "image/png"
+
+
+# =============================================================================
+# Paso 11.1 -- regresion del 500 real en produccion al crear un preset.
+#
+# Causa raiz confirmada con el traceback real (capturado via
+# /diagnostico/ultimo-error, ver informe): psycopg2.errors.
+# StringDataRightTruncation: value too long for type character
+# varying(40). El slug de un preset personalizado se construia como
+# "personalizado-{empresa_id}-{nombre recortado a 30 caracteres}" --
+# el prefijo por si solo ya ocupa 16-18+ caracteres, así que con la
+# columna en VARCHAR(40) cualquier nombre de longitud normal ya
+# desbordaba el límite. SQLite (usado en desarrollo/tests) NUNCA hace
+# cumplir el límite de un VARCHAR(N) -- por eso los 101 tests previos
+# pasaban sin detectarlo; el problema solo era visible contra Postgres
+# real. Estos tests verifican la LONGITUD del slug explícitamente
+# (independiente del motor de base de datos) para que una regresión
+# futura se detecte aquí, no en producción.
+# =============================================================================
+
+from app.models import Preset
+from app.services.presets import LONGITUD_MAXIMA_SLUG, _generar_slug_personalizado
+
+
+def test_generar_slug_nunca_excede_la_longitud_maxima_de_columna():
+    """Prueba unitaria directa del generador de slugs: con un nombre
+    largo (60 caracteres, el máximo que permite Preset.nombre) y un
+    empresa_id de varios dígitos, el slug resultante nunca debe superar
+    LONGITUD_MAXIMA_SLUG -- exactamente lo que Postgres rechazaba."""
+    nombre_largo = "X" * 60
+    slug = _generar_slug_personalizado(999999, nombre_largo)
+    assert len(slug) <= LONGITUD_MAXIMA_SLUG
+    assert slug.startswith("personalizado-999999-")
+
+
+def test_slug_del_preset_creado_respeta_el_limite_de_columna(client, usuario_a_con_empresa):
+    """El nombre que reproducia el 500 real en produccion ('Verificacion
+    Deploy Paso 11', con el prefijo personalizado- + empresa_id
+    generaba un slug de 45+ caracteres contra una columna de 40)."""
+    resp = client.post("/photo-studio/presets/nuevo", json={"nombre": "Verificacion Deploy Paso 11"})
+    assert resp.status_code == 201
+    preset_id = resp.get_json()["preset_id"]
+
+    from app.extensions import db
+
+    with client.application.app_context():
+        preset = db.session.get(Preset, preset_id)
+        assert len(preset.slug) <= LONGITUD_MAXIMA_SLUG
+        # La columna del modelo debe coincidir con el limite que usa el generador de slugs.
+        assert Preset.slug.type.length == LONGITUD_MAXIMA_SLUG
+
+
+def test_crear_preset_con_nombre_largo_no_falla(client, usuario_a_con_empresa):
+    """Un nombre realista y largo (60 caracteres, el maximo de
+    Preset.nombre) NO debe causar un error -- este es exactamente el
+    escenario que rompia en produccion."""
+    nombre_60 = "Publi Cálido Comercial para Catálogo de Productos y Eventos"[:60]
+    resp = client.post("/photo-studio/presets/nuevo", json={"nombre": nombre_60})
+    assert resp.status_code == 201
+
+
+def test_crear_multiples_presets_consecutivos(client, usuario_a_con_empresa):
+    """Varias creaciones seguidas, con nombres de longitud variable
+    (incluyendo largos), en la MISMA sesion de cliente -- reproduce el
+    patron real donde el problema aparecia de forma consistente tras
+    unos pocos intentos."""
+    nombres = [
+        "Corto",
+        "Un nombre de longitud media para probar",
+        "Otro preset con un nombre bastante largo para el catálogo",
+        "X",
+        "Cálido Comercial",
+    ]
+    ids_creados = []
+    for nombre in nombres:
+        resp = client.post("/photo-studio/presets/nuevo", json={"nombre": nombre})
+        assert resp.status_code == 201, f"Fallo creando {nombre!r}: {resp.get_json()}"
+        ids_creados.append(resp.get_json()["preset_id"])
+    assert len(set(ids_creados)) == len(nombres)  # todos son presets distintos
+
+
+def test_crear_y_eliminar_preset(client, usuario_a_con_empresa):
+    resp = client.post("/photo-studio/presets/nuevo", json={"nombre": "Preset para eliminar"})
+    preset_id = resp.get_json()["preset_id"]
+    resp = client.post(f"/photo-studio/presets/{preset_id}/eliminar")
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+
+
+def test_crear_preset_despues_de_eliminar_otro(client, usuario_a_con_empresa):
+    resp1 = client.post("/photo-studio/presets/nuevo", json={"nombre": "Preset temporal a eliminar"})
+    preset_id_1 = resp1.get_json()["preset_id"]
+    client.post(f"/photo-studio/presets/{preset_id_1}/eliminar")
+
+    resp2 = client.post("/photo-studio/presets/nuevo", json={"nombre": "Preset creado despues de eliminar el anterior"})
+    assert resp2.status_code == 201
+
+
+def test_crear_preset_despues_de_duplicar(client, usuario_a_con_empresa):
+    from app.extensions import db
+
+    with client.application.app_context():
+        preset_sistema_id = db.session.query(Preset).filter_by(slug="calido").first().id
+
+    resp_dup = client.post(f"/photo-studio/presets/{preset_sistema_id}/duplicar")
+    assert resp_dup.status_code == 201
+
+    resp_crear = client.post("/photo-studio/presets/nuevo", json={"nombre": "Preset creado justo despues de duplicar"})
+    assert resp_crear.status_code == 201
+
+
+def test_crear_preset_despues_de_una_excepcion_controlada(client, usuario_a_con_empresa):
+    """Un intento de creacion invalido (sin nombre, error 400 manejado
+    normalmente, sin tocar la base de datos) no debe dejar la sesion de
+    SQLAlchemy en un estado que impida crear un preset valido justo
+    despues."""
+    resp_invalido = client.post("/photo-studio/presets/nuevo", json={"nombre": ""})
+    assert resp_invalido.status_code == 400
+
+    resp_valido = client.post("/photo-studio/presets/nuevo", json={"nombre": "Preset valido tras un intento fallido"})
+    assert resp_valido.status_code == 201
+
+
+def test_rollback_tras_error_no_afecta_creaciones_posteriores(client, usuario_a_con_empresa, monkeypatch):
+    """Simula una excepcion real DENTRO de crear_preset_personalizado
+    (no solo una validacion 400) para confirmar que la sesion de
+    SQLAlchemy queda utilizable despues -- este es el escenario que el
+    manejador global de errores 500 ahora cubre con
+    db.session.rollback() (ver app/core/errors.py).
+
+    PROPAGATE_EXCEPTIONS se desactiva temporalmente: con TESTING=True
+    (conftest.py) Flask deja pasar la excepcion cruda al cliente de
+    pruebas en vez de convertirla en una respuesta 500 real -- aqui
+    necesitamos exactamente el comportamiento de produccion (pasar por
+    el errorhandler(500) y su rollback), no la excepcion cruda.
+    """
+    import app.services.presets as presets_mod
+
+    original = presets_mod.normalizar_parametros
+    llamadas = {"n": 0}
+
+    def _falla_una_vez(entrada):
+        llamadas["n"] += 1
+        if llamadas["n"] == 1:
+            raise RuntimeError("fallo simulado dentro de crear_preset_personalizado")
+        return original(entrada)
+
+    monkeypatch.setattr(presets_mod, "normalizar_parametros", _falla_una_vez)
+    client.application.config["PROPAGATE_EXCEPTIONS"] = False
+
+    resp_falla = client.post("/photo-studio/presets/nuevo", json={"nombre": "Este intento debe fallar"})
+    assert resp_falla.status_code == 500
+
+    resp_ok = client.post("/photo-studio/presets/nuevo", json={"nombre": "Este intento debe funcionar"})
+    assert resp_ok.status_code == 201
+
+
+def test_dos_operaciones_consecutivas_misma_sesion_de_cliente(client, usuario_a_con_empresa):
+    """crear -> editar -> duplicar -> eliminar -> crear, todo en la
+    misma sesion HTTP (mismo patron que gunicorn con un solo worker
+    sincrono en produccion: una peticion despues de otra, reutilizando
+    el mismo proceso)."""
+    r1 = client.post("/photo-studio/presets/nuevo", json={"nombre": "Secuencia paso 1"})
+    assert r1.status_code == 201
+    pid = r1.get_json()["preset_id"]
+
+    r2 = client.post(f"/photo-studio/presets/{pid}/editar", json={"nombre": "Secuencia paso 2 editado", "objetivo_brillo": 0.6})
+    assert r2.status_code == 200
+
+    r3 = client.post(f"/photo-studio/presets/{pid}/duplicar")
+    assert r3.status_code == 201
+
+    r4 = client.post(f"/photo-studio/presets/{pid}/eliminar")
+    assert r4.status_code == 200
+
+    r5 = client.post("/photo-studio/presets/nuevo", json={"nombre": "Secuencia paso final"})
+    assert r5.status_code == 201
+
+
+def test_aislamiento_entre_empresas_no_afectado_por_longitud_de_nombre(client, usuario_a_con_empresa, usuario_b_con_empresa):
+    """El slug incluye el empresa_id -- confirmar que dos empresas
+    pueden crear un preset con el MISMO nombre largo sin chocar entre
+    si ni con el limite de columna."""
+    nombre_compartido = "Nombre de preset idéntico usado por dos empresas distintas"
+
+    iniciar_sesion_de_prueba(client, usuario_a_con_empresa["usuario_id"], "a@example.com")
+    resp_a = client.post("/photo-studio/presets/nuevo", json={"nombre": nombre_compartido})
+    assert resp_a.status_code == 201
+
+    iniciar_sesion_de_prueba(client, usuario_b_con_empresa["usuario_id"], "b@example.com")
+    resp_b = client.post("/photo-studio/presets/nuevo", json={"nombre": nombre_compartido})
+    assert resp_b.status_code == 201
+
+    assert resp_a.get_json()["preset_id"] != resp_b.get_json()["preset_id"]

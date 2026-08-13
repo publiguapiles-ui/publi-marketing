@@ -368,6 +368,30 @@ def obtener_preset_automatico():
     return db.session.query(Preset).filter_by(slug="automatico", es_sistema=True, activo=True).first()
 
 
+# Paso 11.1: debe coincidir exactamente con Preset.slug (db.String).
+# Centralizado aqui para que la generacion del slug SIEMPRE respete el
+# limite real de la columna, sin importar cuanto mida el prefijo
+# "personalizado-{empresa_id}-" (causa raiz del 500 en produccion: un
+# limite de 40 en la columna, pero el prefijo por si solo ya ocupa
+# 16-18+ caracteres, dejaba tan poco margen que un nombre normal lo
+# superaba -- SQLite nunca hizo cumplir ese limite, Postgres si).
+LONGITUD_MAXIMA_SLUG = 160
+
+
+def _generar_slug_personalizado(empresa_id, nombre):
+    """Construye el slug de un preset personalizado garantizando que
+    NUNCA excede LONGITUD_MAXIMA_SLUG, sin importar la longitud de
+    `nombre`, `empresa_id` o si el prefijo cambia en el futuro -- el
+    presupuesto para el nombre se calcula dinamicamente en vez de usar
+    un numero fijo (ej. [:30]) que asumia un prefijo mas corto del que
+    realmente tiene.
+    """
+    prefijo = f"personalizado-{empresa_id}-"
+    presupuesto = max(1, LONGITUD_MAXIMA_SLUG - len(prefijo))
+    nombre_normalizado = nombre.lower().strip().replace(" ", "-")[:presupuesto]
+    return f"{prefijo}{nombre_normalizado}"[:LONGITUD_MAXIMA_SLUG]
+
+
 def crear_preset_personalizado(empresa_id, usuario_id, nombre, descripcion, categoria, parametros_entrada):
     """Crea un preset personalizado nuevo para esta empresa. Devuelve
     (preset, error). El slug se deriva del nombre + empresa para que
@@ -384,7 +408,7 @@ def crear_preset_personalizado(empresa_id, usuario_id, nombre, descripcion, cate
         return None, "Categoría inválida."
 
     parametros = normalizar_parametros(parametros_entrada)
-    slug = f"personalizado-{empresa_id}-{nombre.lower().strip().replace(' ', '-')[:30]}"
+    slug = _generar_slug_personalizado(empresa_id, nombre)
 
     preset = Preset(
         slug=slug,

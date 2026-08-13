@@ -40,7 +40,17 @@ class Preset(db.Model):
     __tablename__ = "presets"
 
     id = db.Column(db.Integer, primary_key=True)
-    slug = db.Column(db.String(40), nullable=False, index=True)
+    # Paso 11.1: 40 alcanzaba para los slugs cortos y fijos de los
+    # presets de sistema (Paso 10, ej. "automatico"), pero el slug de
+    # un preset PERSONALIZADO (Paso 11) es "personalizado-{empresa_id}-
+    # {nombre}" y ese prefijo por si solo ya ocupa 16-18+ caracteres --
+    # con 40 se truncaba el nombre a tan poco espacio que un nombre
+    # normal ya superaba el limite. SQLite (usado en desarrollo/tests)
+    # nunca aplico ese limite de columna, asi que el problema real solo
+    # aparecio en produccion (Postgres, que si lo hace cumplir:
+    # psycopg2.errors.StringDataRightTruncation). Ver
+    # app/services/presets.py::_generar_slug_personalizado.
+    slug = db.Column(db.String(160), nullable=False, index=True)
     nombre = db.Column(db.String(60), nullable=False)
     descripcion = db.Column(db.String(255))
 
