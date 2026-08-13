@@ -147,6 +147,49 @@ def resolver_entidades_para_kpi(empresa_id, entidad_id):
     return [], None
 
 
+def _calcular_desde_filas(filas):
+    """Punto UNICO donde se pasa de una lista de filas Metrica a un
+    dict de KPI -- calcular_kpis() y serie_diaria() (Paso 4) llaman
+    exclusivamente a esta funcion para que la aritmetica de agregacion
+    (aditivas sumadas, derivadas recalculadas desde los totales) nunca
+    se repita ni diverja entre "KPI del periodo completo" y "KPI de un
+    solo dia dentro de una serie"."""
+    totales = _sumar_por_metrica(filas)
+
+    resultado = {}
+    for clave in METRICAS_ADITIVAS:
+        resultado[clave] = _redondear(totales.get(clave), _PRECISION.get(clave, 2)) if clave in totales else None
+
+    for clave, formula in _DERIVADAS.items():
+        try:
+            valor = formula(totales)
+        except (KeyError, ZeroDivisionError, TypeError):
+            valor = None
+        resultado[clave] = _redondear(valor, _PRECISION.get(clave, 2))
+
+    resultado["resultados"] = resultado["conversiones"]
+    return resultado
+
+
+def _filas_del_alcance(empresa_id, entidad_ids, fecha_inicio, fecha_fin):
+    """Filas de Metrica para el alcance (`entidad_ids`) y rango pedido
+    -- unico punto que decide COMO se traduce `entidad_ids` en una
+    consulta (None = nivel "campana" de toda la empresa, ver nota de
+    doble conteo en calcular_kpis). Usado por calcular_kpis() y
+    serie_diaria() para que ambos agreguen exactamente el mismo
+    conjunto de datos."""
+    from app.services.metricas import consultar_metricas
+
+    if entidad_ids is None:
+        return consultar_metricas(empresa_id, entidad_tipo="campana", fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
+    if not entidad_ids:
+        return []
+    filas = []
+    for entidad_id in entidad_ids:
+        filas.extend(consultar_metricas(empresa_id, entidad_id=entidad_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin))
+    return filas
+
+
 def calcular_kpis(empresa_id, entidad_ids, fecha_inicio, fecha_fin):
     """KPI agregados para el conjunto de entidades dado, en el rango
     [fecha_inicio, fecha_fin] (inclusive). `entidad_ids=None` agrega
@@ -170,32 +213,35 @@ def calcular_kpis(empresa_id, entidad_ids, fecha_inicio, fecha_fin):
     "resultados" como alias explicito de "conversiones" (ver nota de
     catalogo en app/services/metricas.py sobre esta simplificacion).
     """
-    from app.services.metricas import consultar_metricas
+    filas = _filas_del_alcance(empresa_id, entidad_ids, fecha_inicio, fecha_fin)
+    return _calcular_desde_filas(filas)
 
-    if entidad_ids is None:
-        filas = consultar_metricas(empresa_id, entidad_tipo="campana", fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-    elif not entidad_ids:
-        filas = []
-    else:
-        filas = []
-        for entidad_id in entidad_ids:
-            filas.extend(consultar_metricas(empresa_id, entidad_id=entidad_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin))
 
-    totales = _sumar_por_metrica(filas)
+def serie_diaria(empresa_id, entidad_ids, fecha_inicio, fecha_fin):
+    """KPI dia por dia dentro de [fecha_inicio, fecha_fin] (Paso 4:
+    graficos de evolucion) -- reutiliza EXACTAMENTE la misma agregacion
+    que calcular_kpis() (_calcular_desde_filas), solo que agrupada por
+    fecha en vez de colapsada a un unico total. Una sola consulta a la
+    base de datos (no una por dia) -- se agrupa en Python.
 
-    resultado = {}
-    for clave in METRICAS_ADITIVAS:
-        resultado[clave] = _redondear(totales.get(clave), _PRECISION.get(clave, 2)) if clave in totales else None
+    Devuelve una lista ordenada por fecha de dicts
+    {"fecha": date, **kpis_de_ese_dia}. Un dia sin ninguna fila
+    sincronizada devuelve sus KPI en None (nunca 0 inventado) --
+    distinto de un dia con spend=0.0 realmente reportado por Meta."""
+    from datetime import timedelta
 
-    for clave, formula in _DERIVADAS.items():
-        try:
-            valor = formula(totales)
-        except (KeyError, ZeroDivisionError, TypeError):
-            valor = None
-        resultado[clave] = _redondear(valor, _PRECISION.get(clave, 2))
+    filas = _filas_del_alcance(empresa_id, entidad_ids, fecha_inicio, fecha_fin)
 
-    resultado["resultados"] = resultado["conversiones"]
-    return resultado
+    filas_por_fecha = {}
+    for fila in filas:
+        filas_por_fecha.setdefault(fila.fecha, []).append(fila)
+
+    dias = []
+    fecha = fecha_inicio
+    while fecha <= fecha_fin:
+        dias.append({"fecha": fecha, **_calcular_desde_filas(filas_por_fecha.get(fecha, []))})
+        fecha += timedelta(days=1)
+    return dias
 
 
 def calcular_variacion_porcentual(valor_anterior, valor_actual):

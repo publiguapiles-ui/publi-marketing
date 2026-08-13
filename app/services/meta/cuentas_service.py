@@ -181,6 +181,22 @@ def vincular_activos(empresa_id, seleccion):
     return True, None
 
 
+def listar_campanas_de_cuenta(empresa_id, cuenta_id):
+    """Campañas hijas de una cuenta publicitaria ya vinculada -- lectura
+    pura, sin llamar a Meta (Paso 4: filtro y tabla del dashboard).
+    SIEMPRE filtrado por empresa_id, incluso si `cuenta_id` viniera de
+    otra empresa (aislamiento multi-tenant)."""
+    from app.extensions import db
+    from app.models import EntidadPublicitaria
+
+    return (
+        db.session.query(EntidadPublicitaria)
+        .filter_by(empresa_id=empresa_id, entidad_padre_id=cuenta_id, tipo="campana", activo=True)
+        .order_by(EntidadPublicitaria.nombre)
+        .all()
+    )
+
+
 def listar_entidades_empresa(empresa_id, tipo=None, solo_activas=True):
     """Entidades ya vinculadas y guardadas para esta empresa (lectura
     pura, sin llamar a Meta) -- lo que la pantalla de Conexiones

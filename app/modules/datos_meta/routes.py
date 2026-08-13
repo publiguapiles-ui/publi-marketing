@@ -32,13 +32,20 @@ from app.services.meta.conexiones import (
     listar_conexiones_empresa,
     obtener_conexion_activa,
 )
-from app.services.meta.cuentas_service import listar_activos_disponibles, listar_entidades_empresa, vincular_activos
+from app.services.meta.cuentas_service import (
+    listar_activos_disponibles,
+    listar_campanas_de_cuenta,
+    listar_entidades_empresa,
+    vincular_activos,
+)
 from app.services.meta.kpi import (
     CLAVES_KPI,
     ETIQUETAS_KPI,
+    calcular_kpis,
     comparar_entidades,
     comparar_periodos,
     resolver_entidades_para_kpi,
+    serie_diaria,
 )
 from app.services.meta.sincronizacion import (
     MAX_INTENTOS,
@@ -374,3 +381,219 @@ def kpi_prueba():
         claves_kpi=CLAVES_KPI,
         etiquetas_kpi=ETIQUETAS_KPI,
     )
+
+
+# --- Dashboard visual (Paso 4) -----------------------------------------------------
+#
+# Esta seccion NO calcula ningun KPI -- solo arma/serializa lo que ya
+# devuelve app/services/meta/kpi.py (Paso 3) y app/services/
+# presupuestos.py (Paso 2) hacia JSON. El template no hace aritmetica;
+# todo el renderizado de tarjetas/graficos/tabla ocurre en
+# datos_meta_dashboard.js a partir de ese JSON, tanto en la carga
+# inicial (embebido en la pagina) como al cambiar filtros (via fetch a
+# /datos-meta/dashboard/datos, sin recargar la aplicacion completa).
+
+ESTADOS_CAMPANA_FILTRO = {
+    # Mapeo honesto a partir de los valores REALES que Meta reporta en
+    # effective_status/status (ver campanas_service.py) -- nunca se
+    # inventan estados que Meta no use. "finalizadas" cubre campanas
+    # archivadas o eliminadas manualmente; Meta no tiene un estado
+    # "completada" propio para cuando solo vence el stop_time.
+    "activas": ("ACTIVE",),
+    "desactivadas": ("PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"),
+    "finalizadas": ("ARCHIVED", "DELETED"),
+}
+
+
+def _filtrar_campanas_por_estado(campanas, estado_clave):
+    if not estado_clave or estado_clave == "todas":
+        return list(campanas)
+    permitidos = ESTADOS_CAMPANA_FILTRO.get(estado_clave)
+    if not permitidos:
+        return list(campanas)
+    return [c for c in campanas if c.estado in permitidos]
+
+
+def _serializar_campana(c):
+    return {
+        "id": c.id,
+        "nombre": c.nombre or c.id_externo,
+        "id_externo": c.id_externo,
+        "estado": c.estado,
+        "objetivo": (c.atributos or {}).get("objetivo"),
+    }
+
+
+def _serializar_comparacion(comparacion):
+    if comparacion is None:
+        return None
+    return {
+        "periodo_actual": {
+            "fecha_inicio": comparacion["periodo_actual"]["fecha_inicio"].isoformat(),
+            "fecha_fin": comparacion["periodo_actual"]["fecha_fin"].isoformat(),
+            "kpis": comparacion["periodo_actual"]["kpis"],
+        },
+        "periodo_anterior": {
+            "fecha_inicio": comparacion["periodo_anterior"]["fecha_inicio"].isoformat(),
+            "fecha_fin": comparacion["periodo_anterior"]["fecha_fin"].isoformat(),
+            "kpis": comparacion["periodo_anterior"]["kpis"],
+        },
+        "variacion_porcentual": comparacion["variacion_porcentual"],
+    }
+
+
+def _serializar_resumen_presupuesto(r):
+    if r is None:
+        return None
+    p = r["presupuesto"]
+    return {
+        "id": p.id,
+        "nombre": p.nombre,
+        "tipo": p.tipo,
+        "monto": p.monto,
+        "moneda": p.moneda,
+        "fecha_inicio": r["fecha_inicio"].isoformat(),
+        "fecha_fin": r["fecha_fin"].isoformat(),
+        "gasto_real": r["gasto_real"],
+        "disponible": r["disponible"],
+        "porcentaje_usado": r["porcentaje_usado"],
+        "excedido": r["excedido"],
+    }
+
+
+def _leer_filtros_dashboard(args):
+    cuenta_id = args.get("cuenta_id", type=int)
+    campana_id = args.get("campana_id", type=int)
+
+    estado_clave = args.get("estado") or "todas"
+    if estado_clave not in ("todas",) + tuple(ESTADOS_CAMPANA_FILTRO.keys()):
+        estado_clave = "todas"
+
+    comparar = args.get("comparar") in ("1", "true", "True")
+
+    periodo_clave = args.get("periodo") or "ultimos_30_dias"
+    if periodo_clave not in PERIODOS_PREDEFINIDOS:
+        periodo_clave = "ultimos_30_dias"
+
+    try:
+        if periodo_clave == "personalizado":
+            fecha_inicio = datetime.date.fromisoformat(args["fecha_inicio"])
+            fecha_fin = datetime.date.fromisoformat(args["fecha_fin"])
+        else:
+            fecha_inicio, fecha_fin = resolver_periodo(periodo_clave)
+    except (ValueError, KeyError, TypeError):
+        periodo_clave = "ultimos_30_dias"
+        fecha_inicio, fecha_fin = resolver_periodo(periodo_clave)
+
+    return {
+        "cuenta_id": cuenta_id,
+        "campana_id": campana_id,
+        "periodo_clave": periodo_clave,
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "comparar": comparar,
+        "estado_clave": estado_clave,
+    }
+
+
+def _construir_datos_dashboard(empresa, cuenta_id, campana_id, periodo_clave, fecha_inicio, fecha_fin, comparar, estado_clave):
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+
+    campanas_cuenta = []
+    error_cuenta = None
+    entidad_ids_kpi = None  # None = toda la empresa (ver kpi.calcular_kpis)
+    moneda_cuenta = None
+
+    if cuenta_id is not None:
+        cuenta_seleccionada = next((c for c in cuentas if c.id == cuenta_id), None)
+        # Solo se muestra un codigo de moneda cuando hay UNA cuenta
+        # publicitaria especifica seleccionada (dato real de
+        # atributos.moneda, tomado de Meta) -- con "Toda la empresa"
+        # podria haber cuentas en distintas monedas, y mostrar una sola
+        # seria inventar un supuesto que no se puede garantizar.
+        if cuenta_seleccionada is not None:
+            moneda_cuenta = (cuenta_seleccionada.atributos or {}).get("moneda")
+        campanas_cuenta = listar_campanas_de_cuenta(empresa.id, cuenta_id)
+        entidad_ids_kpi, error_cuenta = resolver_entidades_para_kpi(empresa.id, cuenta_id)
+
+    campanas_filtradas = _filtrar_campanas_por_estado(campanas_cuenta, estado_clave)
+
+    if cuenta_id is not None:
+        # el filtro de estado tambien acota el alcance de tarjetas/graficos,
+        # no solo el de la tabla -- son "filtros superiores" del dashboard
+        entidad_ids_kpi = [c.id for c in campanas_filtradas]
+
+    if campana_id is not None and entidad_ids_kpi is not None and campana_id in entidad_ids_kpi:
+        # drill-down a una sola campana ya validada como propia de esta empresa/cuenta
+        entidad_ids_kpi = [campana_id]
+
+    kpis = calcular_kpis(empresa.id, entidad_ids_kpi, fecha_inicio, fecha_fin)
+    comparacion = comparar_periodos(empresa.id, entidad_ids_kpi, fecha_inicio, fecha_fin) if comparar else None
+    serie = serie_diaria(empresa.id, entidad_ids_kpi, fecha_inicio, fecha_fin)
+
+    tabla = []
+    if campanas_filtradas:
+        comparacion_entidades = comparar_entidades(
+            empresa.id, [c.id for c in campanas_filtradas], fecha_inicio, fecha_fin, metrica_orden="spend",
+        )
+        for fila in comparacion_entidades:
+            tabla.append({
+                **_serializar_campana(fila["entidad"]),
+                "kpis": fila["kpis"],
+                "es_mejor": fila["es_mejor"],
+                "es_peor": fila["es_peor"],
+            })
+
+    presupuestos = [calcular_resumen_presupuesto(p) for p in obtener_presupuestos_empresa(empresa.id)]
+    presupuesto_principal = next((r for r in presupuestos if r["presupuesto"].tipo == "estrategico"), None)
+
+    return {
+        "empresa": {"id": empresa.id, "nombre": empresa.nombre},
+        "cuentas": [{"id": c.id, "nombre": c.nombre or c.id_externo} for c in cuentas],
+        "campanas_filtro": [_serializar_campana(c) for c in campanas_cuenta],
+        "filtros": {
+            "cuenta_id": cuenta_id,
+            "campana_id": campana_id,
+            "periodo": periodo_clave,
+            "fecha_inicio": fecha_inicio.isoformat(),
+            "fecha_fin": fecha_fin.isoformat(),
+            "comparar": bool(comparar),
+            "estado": estado_clave or "todas",
+        },
+        "moneda_cuenta": moneda_cuenta,
+        "error_cuenta": error_cuenta,
+        "kpis": kpis,
+        "comparacion": _serializar_comparacion(comparacion),
+        "serie_diaria": [{**d, "fecha": d["fecha"].isoformat()} for d in serie],
+        "tabla_campanas": tabla,
+        "presupuestos": [_serializar_resumen_presupuesto(r) for r in presupuestos],
+        "presupuesto_principal": _serializar_resumen_presupuesto(presupuesto_principal),
+        "claves_kpi": CLAVES_KPI,
+        "etiquetas_kpi": ETIQUETAS_KPI,
+    }
+
+
+@datos_meta_bp.get("/dashboard")
+@login_required
+def dashboard():
+    empresa, _rol = _empresa_activa_o_404()
+    filtros = _leer_filtros_dashboard(request.args)
+    datos = _construir_datos_dashboard(empresa, **filtros)
+
+    return render_template(
+        "datos_meta/dashboard.html",
+        empresa_activa=empresa,
+        datos=datos,
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+        estados_campana=["todas"] + list(ESTADOS_CAMPANA_FILTRO.keys()),
+    )
+
+
+@datos_meta_bp.get("/dashboard/datos")
+@login_required
+def dashboard_datos():
+    empresa, _rol = _empresa_activa_o_404()
+    filtros = _leer_filtros_dashboard(request.args)
+    datos = _construir_datos_dashboard(empresa, **filtros)
+    return jsonify(datos)
