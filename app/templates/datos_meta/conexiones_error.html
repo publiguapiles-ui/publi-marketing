@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block titulo %}Error de conexión · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Conexiones</p>
+  </div>
+</div>
+
+<div class="estado-vacio">
+  <p><strong>No se pudo completar la conexión con Meta.</strong></p>
+  <p class="perfil-nota">{{ mensaje }}</p>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-primario">Volver a Conexiones</a>
+</div>
+{% endblock %}

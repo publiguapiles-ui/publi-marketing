@@ -56,6 +56,12 @@ def create_app(nombre_config=None):
 
             sembrar_presets_sistema()
 
+            # Idempotente: catalogo inicial de metricas (Datos de Meta,
+            # Paso 1) -- mismo motivo que sembrar_presets_sistema.
+            from app.services.metricas import sembrar_catalogo_metricas
+
+            sembrar_catalogo_metricas()
+
     registrar_manejadores_error(app)
     registrar_blueprints(app)
 
@@ -103,9 +109,7 @@ def registrar_blueprints(app):
     from app.modules.ia.routes import ia_bp
     from app.modules.calendario.routes import calendario_bp
     from app.modules.redes_sociales.routes import redes_sociales_bp
-    from app.modules.campanas.routes import campanas_bp
-    from app.modules.analitica.routes import analitica_bp
-    from app.modules.informes.routes import informes_bp
+    from app.modules.datos_meta.routes import datos_meta_bp
     from app.modules.biblioteca.routes import biblioteca_bp
     from app.modules.configuracion.routes import configuracion_bp
     from app.modules.legacy_solicitudes.routes import legacy_bp
@@ -120,9 +124,11 @@ def registrar_blueprints(app):
     app.register_blueprint(ia_bp)
     app.register_blueprint(calendario_bp)
     app.register_blueprint(redes_sociales_bp)
-    app.register_blueprint(campanas_bp)
-    app.register_blueprint(analitica_bp)
-    app.register_blueprint(informes_bp)
+    # Campañas, Analítica e Informes (antes stubs "Próximamente"
+    # independientes) se reorganizaron dentro de Datos de Meta: una
+    # sola integración con Meta, reutilizada por todas las secciones
+    # futuras, en vez de tres sistemas que se conectarían por separado.
+    app.register_blueprint(datos_meta_bp)
     app.register_blueprint(biblioteca_bp)
     app.register_blueprint(configuracion_bp)
     app.register_blueprint(legacy_bp)

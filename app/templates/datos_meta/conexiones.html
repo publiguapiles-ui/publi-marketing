@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block titulo %}Conexiones · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Conexiones</p>
+  </div>
+</div>
+
+{% if not meta_configurado %}
+<div class="estado-vacio">
+  <p><strong>Meta no está configurado en este entorno.</strong></p>
+  <p class="perfil-nota">Faltan las variables de entorno META_APP_ID / META_APP_SECRET / META_REDIRECT_URI. Configúralas para poder conectar una cuenta de Meta.</p>
+</div>
+{% elif not conexion %}
+<div class="estado-vacio">
+  <p>Todavía no has conectado Meta para <strong>{{ empresa_activa.nombre }}</strong>.</p>
+  <a href="{{ url_for('datos_meta.conectar') }}" class="boton-primario">Conectar Meta</a>
+</div>
+{% else %}
+<dl class="perfil-datos">
+  <dt>Empresa</dt>
+  <dd>{{ empresa_activa.nombre }}</dd>
+  <dt>Conectado como</dt>
+  <dd>{{ conexion.nombre_usuario_meta or "—" }} (id {{ conexion.meta_user_id }})</dd>
+  <dt>Estado</dt>
+  <dd>
+    <span class="estado-badge estado-badge-{{ conexion.estado }}">{{ conexion.estado }}</span>
+    {% if conexion.estado == "error" and conexion.ultimo_error %}
+    <span class="perfil-nota">— {{ conexion.ultimo_error }}</span>
+    {% endif %}
+  </dd>
+  <dt>Permisos concedidos</dt>
+  <dd>{{ conexion.scopes_concedidos or "—" }}</dd>
+  <dt>Token vence</dt>
+  <dd>{{ conexion.token_expira_en.strftime("%d/%m/%Y") if conexion.token_expira_en else "—" }}</dd>
+  <dt>Última sincronización</dt>
+  <dd>{{ conexion.ultima_sincronizacion_en.strftime("%d/%m/%Y %H:%M") if conexion.ultima_sincronizacion_en else "Todavía no sincronizada" }}</dd>
+</dl>
+
+<div class="cabecera-seccion">
+  <button type="button" id="boton-sincronizar" class="boton-primario">Sincronizar ahora</button>
+  <button type="button" id="boton-desconectar" class="boton-enlace" data-conexion-id="{{ conexion.id }}">Desconectar</button>
+</div>
+<p id="sincronizar-mensaje" class="perfil-nota" hidden></p>
+
+<h2 class="ps-seccion-titulo">Cuentas publicitarias</h2>
+{% if entidades_por_tipo.cuenta_publicitaria %}
+<ul class="lista-simple">
+  {% for cuenta in entidades_por_tipo.cuenta_publicitaria %}
+  <li>{{ cuenta.nombre or cuenta.id_externo }} <span class="perfil-nota">({{ cuenta.id_externo }} · {{ cuenta.atributos.get("moneda", "—") }})</span></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="perfil-nota">Ninguna todavía. Usa "Sincronizar ahora" para descubrirlas.</p>
+{% endif %}
+
+<h2 class="ps-seccion-titulo">Páginas de Facebook</h2>
+{% if entidades_por_tipo.pagina %}
+<ul class="lista-simple">
+  {% for pagina in entidades_por_tipo.pagina %}
+  <li>{{ pagina.nombre or pagina.id_externo }} <span class="perfil-nota">({{ pagina.atributos.get("categoria", "—") }})</span></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="perfil-nota">Ninguna todavía.</p>
+{% endif %}
+
+<h2 class="ps-seccion-titulo">Cuentas de Instagram</h2>
+{% if entidades_por_tipo.cuenta_instagram %}
+<ul class="lista-simple">
+  {% for cuenta in entidades_por_tipo.cuenta_instagram %}
+  <li>{{ cuenta.id_externo }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="perfil-nota">Ninguna todavía.</p>
+{% endif %}
+{% endif %}
+
+{% if historial|length > 1 %}
+<h2 class="ps-seccion-titulo">Historial de conexiones</h2>
+<ul class="lista-simple">
+  {% for c in historial %}
+  <li>{{ c.creado_en.strftime("%d/%m/%Y %H:%M") }} — {{ c.nombre_usuario_meta or c.meta_user_id }} — <span class="estado-badge estado-badge-{{ c.estado }}">{{ c.estado }}</span></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<script>
+  window.DM_SINCRONIZAR_URL = "{{ url_for('datos_meta.conexiones_sincronizar') }}";
+  window.DM_DESCONECTAR_URL_BASE = "{{ url_for('datos_meta.conexion_desconectar', conexion_id=0) }}".replace("/0/", "/__ID__/");
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_conexiones.js') }}"></script>
+{% endblock %}

@@ -28,6 +28,7 @@ def app():
     from app.extensions import db as _db
     from app.models import Rol
     from app.services.presets import sembrar_presets_sistema
+    from app.services.metricas import sembrar_catalogo_metricas
 
     aplicacion = create_app("development")
     aplicacion.config["TESTING"] = True
@@ -38,6 +39,7 @@ def app():
             _db.session.add(Rol(nombre=nombre))
         _db.session.commit()
         sembrar_presets_sistema()
+        sembrar_catalogo_metricas()
 
         yield aplicacion
 

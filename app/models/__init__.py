@@ -23,6 +23,20 @@ from app.models.sesion_fotografica import (
     ESTADOS_SESION,
     ESTADOS_SESION_TERMINALES,
 )
+from app.models.meta_conexion import MetaConexion, ESTADOS_CONEXION_META
+from app.models.meta_entidad import EntidadPublicitaria, FUENTES_ENTIDAD, TIPOS_ENTIDAD_META
+from app.models.meta_sincronizacion import (
+    SincronizacionMeta,
+    TIPOS_SINCRONIZACION,
+    ESTADOS_SINCRONIZACION,
+    ESTADOS_SINCRONIZACION_TERMINALES,
+)
+from app.models.metrica import (
+    Metrica,
+    CatalogoMetrica,
+    TIPOS_VALOR_METRICA,
+    ORIGENES_METRICA,
+)
 
 __all__ = [
     "Usuario",
@@ -51,4 +65,17 @@ __all__ = [
     "SesionItem",
     "ESTADOS_SESION",
     "ESTADOS_SESION_TERMINALES",
+    "MetaConexion",
+    "ESTADOS_CONEXION_META",
+    "EntidadPublicitaria",
+    "FUENTES_ENTIDAD",
+    "TIPOS_ENTIDAD_META",
+    "SincronizacionMeta",
+    "TIPOS_SINCRONIZACION",
+    "ESTADOS_SINCRONIZACION",
+    "ESTADOS_SINCRONIZACION_TERMINALES",
+    "Metrica",
+    "CatalogoMetrica",
+    "TIPOS_VALOR_METRICA",
+    "ORIGENES_METRICA",
 ]
