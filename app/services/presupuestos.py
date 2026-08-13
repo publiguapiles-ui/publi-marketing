@@ -71,6 +71,21 @@ def obtener_presupuestos_empresa(empresa_id, tipo=None, solo_activos=True):
     return consulta.order_by(PresupuestoPauta.creado_en.desc()).all()
 
 
+def obtener_presupuestos_de_entidad(empresa_id, entidad_id):
+    """Presupuestos de tipo "asignado" vinculados a UNA campaña/conjunto
+    especifico (Paso 5: presupuesto por campaña) -- distinto del
+    presupuesto "estrategico" (capital general de la empresa, sin
+    entidad_id). SIEMPRE filtrado por empresa_id."""
+    from app.extensions import db
+    from app.models import PresupuestoPauta
+
+    return (
+        db.session.query(PresupuestoPauta)
+        .filter_by(empresa_id=empresa_id, entidad_id=entidad_id, activo=True)
+        .all()
+    )
+
+
 def obtener_presupuesto(empresa_id, presupuesto_id):
     from app.extensions import db
     from app.models import PresupuestoPauta

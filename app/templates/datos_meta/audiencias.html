@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block titulo %}Audiencias · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Audiencias — separa lo configurado en cada conjunto de anuncios de lo que realmente produjo resultados.</p>
+  </div>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+</div>
+
+<form id="dm-filtros" class="formulario-simple dm-form-kpi" method="get">
+  <label>
+    Cuenta publicitaria
+    <select name="cuenta_id" id="dm-filtro-cuenta">
+      <option value="">Toda la empresa</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}" {% if cuenta_id == cuenta.id %}selected{% endif %}>{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Período
+    <select name="periodo" id="dm-filtro-periodo">
+      {% for p in periodos %}
+      <option value="{{ p }}" {% if p == datos.filtros.periodo %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="dm-campo-periodo" id="dm-filtro-personalizado" {% if datos.filtros.periodo != "personalizado" %}hidden{% endif %}>
+    <label>Desde <input type="date" name="fecha_inicio" id="dm-filtro-fecha-inicio" value="{{ datos.filtros.fecha_inicio if datos.filtros.periodo == 'personalizado' else '' }}" /></label>
+    <label>Hasta <input type="date" name="fecha_fin" id="dm-filtro-fecha-fin" value="{{ datos.filtros.fecha_fin if datos.filtros.periodo == 'personalizado' else '' }}" /></label>
+  </div>
+  <button type="submit" class="boton-primario">Aplicar filtros</button>
+</form>
+
+<div id="dm-mensaje-error" class="estado-vacio" {% if not datos.error %}hidden{% endif %}>{{ datos.error or "" }}</div>
+
+<section>
+  <h2 class="ps-seccion-titulo">Segmentos (conjuntos de anuncios)</h2>
+  <p class="perfil-nota">"Configurado" es lo que se le pidió a Meta (edad, sexo, ubicación, placements...). "Resultado" es lo que realmente midió el conjunto en el período -- nunca se asume que una segmentación funcionó solo porque se usó.</p>
+  <div id="dm-tabla-segmentos"></div>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Oportunidades detectadas</h2>
+  <div id="dm-oportunidades"></div>
+</section>
+
+<script>
+  window.DM_AUDIENCIAS_INICIAL = {{ datos | tojson }};
+  window.DM_AUDIENCIAS_DATOS_URL = "{{ url_for('datos_meta.audiencias_datos') }}";
+  window.DM_AUDIENCIAS_URL = "{{ url_for('datos_meta.audiencias') }}";
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_audiencias.js') }}"></script>
+{% endblock %}

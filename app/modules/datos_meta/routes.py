@@ -25,6 +25,7 @@ from app.services.meta.auth_service import (
     meta_configurado,
     obtener_identidad_meta,
 )
+from app.services.meta.analisis import analizar_audiencias, construir_analisis_campana
 from app.services.meta.client import MetaAPIError
 from app.services.meta.conexiones import (
     crear_conexion,
@@ -461,14 +462,11 @@ def _serializar_resumen_presupuesto(r):
     }
 
 
-def _leer_filtros_dashboard(args):
-    cuenta_id = args.get("cuenta_id", type=int)
-    campana_id = args.get("campana_id", type=int)
-
-    estado_clave = args.get("estado") or "todas"
-    if estado_clave not in ("todas",) + tuple(ESTADOS_CAMPANA_FILTRO.keys()):
-        estado_clave = "todas"
-
+def _leer_periodo_y_comparar(args):
+    """Lectura compartida de periodo/comparar (Paso 4 y Paso 5) --
+    misma logica de respaldo ante un periodo invalido o fechas
+    personalizadas incompletas: nunca un 500, siempre cae de vuelta a
+    "ultimos_30_dias"."""
     comparar = args.get("comparar") in ("1", "true", "True")
 
     periodo_clave = args.get("periodo") or "ultimos_30_dias"
@@ -485,13 +483,26 @@ def _leer_filtros_dashboard(args):
         periodo_clave = "ultimos_30_dias"
         fecha_inicio, fecha_fin = resolver_periodo(periodo_clave)
 
+    return {"periodo_clave": periodo_clave, "fecha_inicio": fecha_inicio, "fecha_fin": fecha_fin, "comparar": comparar}
+
+
+def _leer_filtros_dashboard(args):
+    cuenta_id = args.get("cuenta_id", type=int)
+    campana_id = args.get("campana_id", type=int)
+
+    estado_clave = args.get("estado") or "todas"
+    if estado_clave not in ("todas",) + tuple(ESTADOS_CAMPANA_FILTRO.keys()):
+        estado_clave = "todas"
+
+    periodo = _leer_periodo_y_comparar(args)
+
     return {
         "cuenta_id": cuenta_id,
         "campana_id": campana_id,
-        "periodo_clave": periodo_clave,
-        "fecha_inicio": fecha_inicio,
-        "fecha_fin": fecha_fin,
-        "comparar": comparar,
+        "periodo_clave": periodo["periodo_clave"],
+        "fecha_inicio": periodo["fecha_inicio"],
+        "fecha_fin": periodo["fecha_fin"],
+        "comparar": periodo["comparar"],
         "estado_clave": estado_clave,
     }
 
@@ -597,3 +608,204 @@ def dashboard_datos():
     filtros = _leer_filtros_dashboard(request.args)
     datos = _construir_datos_dashboard(empresa, **filtros)
     return jsonify(datos)
+
+
+# --- Analisis de campañas y audiencias (Paso 5) ------------------------------------
+#
+# Reutiliza exclusivamente app/services/meta/analisis.py (que a su vez
+# reutiliza kpi.py, presupuestos.py y los nuevos targeting.py/
+# oportunidades.py) -- ningun calculo de KPI ocurre en este archivo,
+# solo se serializa a JSON lo que analisis.py ya devuelve.
+
+def _serializar_fila_kpi(fila, incluir_targeting=False, incluir_creativo=False):
+    atributos = fila["entidad"].atributos or {}
+    fila_serializada = {
+        **_serializar_campana(fila["entidad"]),
+        "kpis": fila["kpis"],
+        "es_mejor": fila["es_mejor"],
+        "es_peor": fila["es_peor"],
+        # presente en conjunto_anuncios (campos daily_budget/lifetime_budget
+        # del AdSet, sincronizados en el Paso 2) -- None para otros tipos.
+        "presupuesto_diario_meta": atributos.get("presupuesto_diario"),
+        "presupuesto_total_meta": atributos.get("presupuesto_total"),
+        # presente solo en filas de audiencias.analizar_audiencias() (un
+        # conjunto no tiene nombre de campaña propio, ver analisis.py).
+        "campana_nombre": fila.get("campana_nombre"),
+    }
+    if incluir_targeting:
+        fila_serializada["targeting"] = fila.get("targeting")
+    if incluir_creativo:
+        fila_serializada["creativo"] = atributos.get("creativo")
+    return fila_serializada
+
+
+def _serializar_campana_detalle(campana):
+    atributos = campana.atributos or {}
+    return {
+        "id": campana.id,
+        "nombre": campana.nombre or campana.id_externo,
+        "id_externo": campana.id_externo,
+        "estado": campana.estado,
+        "objetivo": atributos.get("objetivo"),
+        "fecha_inicio": atributos.get("fecha_inicio"),
+        "fecha_fin": atributos.get("fecha_fin"),
+        # Presupuesto tal como lo reporta Meta (campos daily_budget/
+        # lifetime_budget/budget_remaining de la Campaign API,
+        # sincronizados desde el Paso 2) -- se muestran sin convertir,
+        # ver informe del Paso 5 sobre la unidad monetaria de Meta.
+        "presupuesto_diario_meta": atributos.get("presupuesto_diario"),
+        "presupuesto_total_meta": atributos.get("presupuesto_total"),
+        "presupuesto_restante_meta": atributos.get("presupuesto_restante"),
+    }
+
+
+def _serializar_analisis_campana(paquete, filtros):
+    presupuestos_asignados = [
+        _serializar_resumen_presupuesto(calcular_resumen_presupuesto(p)) for p in paquete["presupuestos_asignados"]
+    ]
+
+    return {
+        "campana": _serializar_campana_detalle(paquete["campana"]),
+        "kpis": paquete["kpis"],
+        "comparacion": _serializar_comparacion(paquete["comparacion"]),
+        "serie_diaria": [{**d, "fecha": d["fecha"].isoformat()} for d in paquete["serie_diaria"]],
+        "conjuntos": [_serializar_fila_kpi(f, incluir_targeting=True) for f in paquete["conjuntos"]],
+        "oportunidades_conjuntos": paquete["oportunidades_conjuntos"],
+        "anuncios": [_serializar_fila_kpi(f, incluir_creativo=True) for f in paquete["anuncios"]],
+        "oportunidades_anuncios": paquete["oportunidades_anuncios"],
+        "gasto_real": paquete["gasto_real"],
+        "presupuestos_asignados": presupuestos_asignados,
+        "oportunidades_campana": paquete["oportunidades_campana"],
+        "filtros": {
+            "periodo": filtros["periodo_clave"],
+            "fecha_inicio": filtros["fecha_inicio"].isoformat(),
+            "fecha_fin": filtros["fecha_fin"].isoformat(),
+            "comparar": filtros["comparar"],
+        },
+        "claves_kpi": CLAVES_KPI,
+        "etiquetas_kpi": ETIQUETAS_KPI,
+    }
+
+
+@datos_meta_bp.get("/campanas")
+@login_required
+def campanas_lista():
+    """Historico de campañas (Paso 5, punto 8): activas, finalizadas y
+    desactivadas, con su KPI del periodo -- entrada de navegacion hacia
+    el analisis detallado de cada una."""
+    empresa, _rol = _empresa_activa_o_404()
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+
+    cuenta_id = request.args.get("cuenta_id", type=int)
+    estado_clave = request.args.get("estado") or "todas"
+    if estado_clave not in ("todas",) + tuple(ESTADOS_CAMPANA_FILTRO.keys()):
+        estado_clave = "todas"
+
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    campanas = []
+    comparacion = []
+    if cuenta_id is not None:
+        campanas = _filtrar_campanas_por_estado(listar_campanas_de_cuenta(empresa.id, cuenta_id), estado_clave)
+        if campanas:
+            comparacion = comparar_entidades(empresa.id, [c.id for c in campanas], periodo["fecha_inicio"], periodo["fecha_fin"], metrica_orden="spend")
+
+    return render_template(
+        "datos_meta/campanas_lista.html",
+        empresa_activa=empresa,
+        cuentas=cuentas,
+        cuenta_id=cuenta_id,
+        estado_clave=estado_clave,
+        estados_campana=["todas"] + list(ESTADOS_CAMPANA_FILTRO.keys()),
+        periodo_clave=periodo["periodo_clave"],
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+        fecha_inicio=periodo["fecha_inicio"],
+        fecha_fin=periodo["fecha_fin"],
+        comparacion=comparacion,
+        etiquetas_kpi=ETIQUETAS_KPI,
+    )
+
+
+@datos_meta_bp.get("/campanas/<int:campana_id>")
+@login_required
+def campana_detalle(campana_id):
+    empresa, _rol = _empresa_activa_o_404()
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    paquete, error = construir_analisis_campana(empresa.id, campana_id, periodo["fecha_inicio"], periodo["fecha_fin"], comparar=periodo["comparar"])
+    if paquete is None:
+        abort(404, error)
+
+    return render_template(
+        "datos_meta/campana_detalle.html",
+        empresa_activa=empresa,
+        campana_id=campana_id,
+        datos=_serializar_analisis_campana(paquete, periodo),
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+    )
+
+
+@datos_meta_bp.get("/campanas/<int:campana_id>/datos")
+@login_required
+def campana_datos(campana_id):
+    empresa, _rol = _empresa_activa_o_404()
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    paquete, error = construir_analisis_campana(empresa.id, campana_id, periodo["fecha_inicio"], periodo["fecha_fin"], comparar=periodo["comparar"])
+    if paquete is None:
+        return jsonify({"ok": False, "error": error}), 404
+
+    return jsonify(_serializar_analisis_campana(paquete, periodo))
+
+
+def _serializar_audiencias(paquete, error, cuenta_id, periodo):
+    return {
+        "error": error,
+        "cuenta_id": cuenta_id,
+        "segmentos": [_serializar_fila_kpi(f, incluir_targeting=True) for f in paquete["segmentos"]] if paquete else [],
+        "oportunidades": paquete["oportunidades"] if paquete else [],
+        "filtros": {
+            "periodo": periodo["periodo_clave"],
+            "fecha_inicio": periodo["fecha_inicio"].isoformat(),
+            "fecha_fin": periodo["fecha_fin"].isoformat(),
+        },
+        "etiquetas_kpi": ETIQUETAS_KPI,
+    }
+
+
+@datos_meta_bp.get("/audiencias")
+@login_required
+def audiencias():
+    """Analisis de audiencias (Paso 5, punto 5): separa SIEMPRE
+    "audiencia configurada" (targeting) de "audiencia que realmente
+    produjo resultados" (kpis medidos) -- nunca se asume que una
+    segmentacion funciono solo porque se uso."""
+    empresa, _rol = _empresa_activa_o_404()
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+    cuenta_id = request.args.get("cuenta_id", type=int)
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    paquete, error = analizar_audiencias(empresa.id, cuenta_id, periodo["fecha_inicio"], periodo["fecha_fin"])
+
+    return render_template(
+        "datos_meta/audiencias.html",
+        empresa_activa=empresa,
+        cuentas=cuentas,
+        cuenta_id=cuenta_id,
+        datos=_serializar_audiencias(paquete, error, cuenta_id, periodo),
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+    )
+
+
+@datos_meta_bp.get("/audiencias/datos")
+@login_required
+def audiencias_datos():
+    empresa, _rol = _empresa_activa_o_404()
+    cuenta_id = request.args.get("cuenta_id", type=int)
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    paquete, error = analizar_audiencias(empresa.id, cuenta_id, periodo["fecha_inicio"], periodo["fecha_fin"])
+    return jsonify(_serializar_audiencias(paquete, error, cuenta_id, periodo))

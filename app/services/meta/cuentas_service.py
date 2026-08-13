@@ -197,6 +197,65 @@ def listar_campanas_de_cuenta(empresa_id, cuenta_id):
     )
 
 
+def listar_conjuntos_de_campana(empresa_id, campana_id):
+    """Conjuntos de anuncios hijos de una campaña -- lectura pura
+    (Paso 5: analisis de campaña). SIEMPRE filtrado por empresa_id."""
+    from app.extensions import db
+    from app.models import EntidadPublicitaria
+
+    return (
+        db.session.query(EntidadPublicitaria)
+        .filter_by(empresa_id=empresa_id, entidad_padre_id=campana_id, tipo="conjunto_anuncios", activo=True)
+        .order_by(EntidadPublicitaria.nombre)
+        .all()
+    )
+
+
+def listar_anuncios_de_conjuntos(empresa_id, conjunto_ids):
+    """Anuncios hijos de cualquiera de los conjuntos dados -- lectura
+    pura (Paso 5: analisis de campaña/conjunto). SIEMPRE filtrado por
+    empresa_id, incluso si algun conjunto_id no perteneciera a esta
+    empresa (aislamiento multi-tenant)."""
+    from app.extensions import db
+    from app.models import EntidadPublicitaria
+
+    if not conjunto_ids:
+        return []
+    return (
+        db.session.query(EntidadPublicitaria)
+        .filter(
+            EntidadPublicitaria.empresa_id == empresa_id,
+            EntidadPublicitaria.entidad_padre_id.in_(conjunto_ids),
+            EntidadPublicitaria.tipo == "anuncio",
+            EntidadPublicitaria.activo == True,  # noqa: E712
+        )
+        .order_by(EntidadPublicitaria.nombre)
+        .all()
+    )
+
+
+def listar_conjuntos_de_empresa(empresa_id, cuenta_id=None):
+    """Todos los conjuntos de anuncios de la empresa (Paso 5: analisis
+    de audiencias) -- opcionalmente acotado a una sola cuenta
+    publicitaria. Sin `cuenta_id`, recorre TODAS las cuentas vinculadas
+    de la empresa."""
+    if cuenta_id is not None:
+        conjuntos = []
+        for campana in listar_campanas_de_cuenta(empresa_id, cuenta_id):
+            conjuntos.extend(listar_conjuntos_de_campana(empresa_id, campana.id))
+        return conjuntos
+
+    from app.extensions import db
+    from app.models import EntidadPublicitaria
+
+    return (
+        db.session.query(EntidadPublicitaria)
+        .filter_by(empresa_id=empresa_id, tipo="conjunto_anuncios", activo=True)
+        .order_by(EntidadPublicitaria.nombre)
+        .all()
+    )
+
+
 def listar_entidades_empresa(empresa_id, tipo=None, solo_activas=True):
     """Entidades ya vinculadas y guardadas para esta empresa (lectura
     pura, sin llamar a Meta) -- lo que la pantalla de Conexiones

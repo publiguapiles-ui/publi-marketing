@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block titulo %}Análisis de campaña · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1 id="dm-campana-nombre">Datos de Meta</h1>
+    <p class="perfil-nota" id="dm-campana-subtitulo">Análisis de campaña</p>
+  </div>
+  <a href="{{ url_for('datos_meta.campanas_lista') }}" class="boton-enlace">← Campañas</a>
+</div>
+
+<form id="dm-filtros" class="formulario-simple dm-form-kpi" method="get">
+  <label>
+    Período
+    <select name="periodo" id="dm-filtro-periodo">
+      {% for p in periodos %}
+      <option value="{{ p }}" {% if p == datos.filtros.periodo %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="dm-campo-periodo" id="dm-filtro-personalizado" {% if datos.filtros.periodo != "personalizado" %}hidden{% endif %}>
+    <label>Desde <input type="date" name="fecha_inicio" id="dm-filtro-fecha-inicio" value="{{ datos.filtros.fecha_inicio if datos.filtros.periodo == 'personalizado' else '' }}" /></label>
+    <label>Hasta <input type="date" name="fecha_fin" id="dm-filtro-fecha-fin" value="{{ datos.filtros.fecha_fin if datos.filtros.periodo == 'personalizado' else '' }}" /></label>
+  </div>
+  <label class="dm-check-comparar">
+    <input type="checkbox" name="comparar" value="1" id="dm-filtro-comparar" {% if datos.filtros.comparar %}checked{% endif %} />
+    Comparar con período anterior
+  </label>
+  <button type="submit" class="boton-primario">Aplicar filtros</button>
+</form>
+
+<section>
+  <h2 class="ps-seccion-titulo">Datos de la campaña</h2>
+  <dl class="perfil-datos" id="dm-campana-metadata"></dl>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Resumen de KPI</h2>
+  <div id="dm-tarjetas-kpi" class="dm-cards-kpi"></div>
+</section>
+
+<section id="dm-seccion-comparacion" hidden>
+  <h2 class="ps-seccion-titulo">Comparación con el período anterior</h2>
+  <div id="dm-tabla-comparacion"></div>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Evolución diaria</h2>
+  <div id="dm-graficos" class="dm-graficos-grid"></div>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Presupuesto</h2>
+  <div id="dm-presupuesto-campana"></div>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Conjuntos de anuncios</h2>
+  <div id="dm-tabla-conjuntos"></div>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Anuncios</h2>
+  <div id="dm-tabla-anuncios"></div>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Oportunidades detectadas</h2>
+  <p class="perfil-nota">Reglas simples sobre los datos ya calculados -- comparan cada conjunto/anuncio contra el promedio de sus hermanos. No usan IA ni Claude, y no modifican nada automáticamente.</p>
+  <div id="dm-oportunidades"></div>
+</section>
+
+<script>
+  window.DM_CAMPANA_INICIAL = {{ datos | tojson }};
+  window.DM_CAMPANA_DATOS_URL = "{{ url_for('datos_meta.campana_datos', campana_id=campana_id) }}";
+  window.DM_CAMPANA_URL = "{{ url_for('datos_meta.campana_detalle', campana_id=campana_id) }}";
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_campana.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block titulo %}Campañas · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Campañas — histórico de activas, finalizadas y desactivadas. Selecciona una para ver su análisis.</p>
+  </div>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+</div>
+
+<form class="formulario-simple dm-form-kpi" method="get">
+  <label>
+    Cuenta publicitaria
+    <select name="cuenta_id">
+      <option value="">Selecciona una cuenta</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}" {% if cuenta_id == cuenta.id %}selected{% endif %}>{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Estado
+    <select name="estado">
+      {% for e in estados_campana %}
+      <option value="{{ e }}" {% if e == estado_clave %}selected{% endif %}>
+        {{ {"todas": "Todas", "activas": "Activas", "finalizadas": "Finalizadas", "desactivadas": "Desactivadas"}[e] }}
+      </option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Período
+    <select name="periodo">
+      {% for p in periodos %}
+      <option value="{{ p }}" {% if p == periodo_clave %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="boton-primario">Consultar</button>
+</form>
+
+{% if not cuentas %}
+<div class="estado-vacio"><p>Todavía no hay ninguna cuenta publicitaria vinculada. <a href="{{ url_for('datos_meta.seleccionar_activos') }}">Elegir activos</a>.</p></div>
+{% elif cuenta_id is none %}
+<div class="estado-vacio"><p>Selecciona una cuenta publicitaria para ver sus campañas.</p></div>
+{% elif not comparacion %}
+<div class="estado-vacio"><p>Ninguna campaña para el estado seleccionado.</p></div>
+{% else %}
+<div class="dm-tabla-scroll">
+<table class="dm-tabla-kpi">
+  <thead>
+    <tr>
+      <th>Campaña</th><th>Estado</th><th>Objetivo</th><th>Inversión</th><th>Resultados</th>
+      <th>Costo por resultado</th><th>CTR</th><th>ROAS</th><th>Rendimiento</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for fila in comparacion %}
+    <tr>
+      <td>{{ fila.entidad.nombre or fila.entidad.id_externo }}</td>
+      <td>{{ fila.entidad.estado or "—" }}</td>
+      <td>{{ (fila.entidad.atributos or {}).get("objetivo") or "—" }}</td>
+      <td>{{ fila.kpis.spend if fila.kpis.spend is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.resultados if fila.kpis.resultados is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.ctr if fila.kpis.ctr is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.roas if fila.kpis.roas is not none else "No disponible" }}</td>
+      <td>
+        {% if fila.es_mejor %}<span class="dm-badge-mejor">Mejor</span>{% endif %}
+        {% if fila.es_peor %}<span class="dm-badge-peor">Peor</span>{% endif %}
+      </td>
+      <td><a href="{{ url_for('datos_meta.campana_detalle', campana_id=fila.entidad.id, periodo=periodo_clave) }}" class="boton-enlace">Análisis →</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
