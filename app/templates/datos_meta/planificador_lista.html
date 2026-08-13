@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block titulo %}Planificador · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Planificador estratégico de pauta — capital disponible, objetivo y período convertidos en una propuesta de distribución por fases. Nunca ejecuta ni modifica nada en Meta.</p>
+  </div>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+</div>
+
+<h2 class="ps-seccion-titulo">Proyectos</h2>
+{% if proyectos %}
+<div class="dm-tabla-scroll">
+<table class="dm-tabla-kpi">
+  <thead>
+    <tr>
+      <th>Proyecto</th><th>Objetivo</th><th>Presupuesto</th><th>Período</th><th>KPI principal</th><th>Estado</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in proyectos %}
+    <tr>
+      <td>{{ p.nombre }}</td>
+      <td>{{ p.objetivo }}</td>
+      <td>{{ p.presupuesto_total }} {{ p.moneda }}</td>
+      <td>{{ p.fecha_inicio.strftime("%d/%m/%Y") }} – {{ p.fecha_fin.strftime("%d/%m/%Y") }}</td>
+      <td>{{ etiquetas_kpi.get(p.kpi_principal, p.kpi_principal) }}</td>
+      <td><span class="estado-badge estado-badge-{{ 'activa' if p.estado == 'plan_aprobado' else 'expirada' }}">{{ "Plan aprobado" if p.estado == "plan_aprobado" else "Borrador" }}</span></td>
+      <td><a href="{{ url_for('datos_meta.planificador_detalle', proyecto_id=p.id) }}" class="boton-enlace">Abrir →</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="estado-vacio"><p>Todavía no hay ningún proyecto estratégico. Crea el primero abajo.</p></div>
+{% endif %}
+
+<h2 class="ps-seccion-titulo">Nuevo proyecto</h2>
+<form id="form-nuevo-proyecto" class="formulario-simple">
+  <label>Empresa <input type="text" value="{{ empresa_activa.nombre }}" disabled /></label>
+  <label>Nombre del proyecto <input type="text" name="nombre" placeholder="Captación de nuevos clientes" required /></label>
+  <label>Objetivo <input type="text" name="objetivo" placeholder="conversiones" required /></label>
+  <label>
+    KPI principal
+    <select name="kpi_principal" required>
+      {% for clave in claves_kpi %}
+      <option value="{{ clave }}" {% if clave == "costo_por_resultado" %}selected{% endif %}>{{ etiquetas_kpi.get(clave, clave) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Capital total de pauta <input type="number" name="presupuesto_total" min="0" step="0.01" required /></label>
+  <label>Moneda <input type="text" name="moneda" value="CRC" maxlength="10" /></label>
+  <label>Fecha inicio <input type="date" name="fecha_inicio" required /></label>
+  <label>Fecha final <input type="date" name="fecha_fin" required /></label>
+  <label>Resultado objetivo <input type="text" name="resultado_objetivo" placeholder="50 conversiones" /></label>
+  <label>
+    Cuenta publicitaria (para el análisis histórico)
+    <select name="cuenta_publicitaria_id">
+      <option value="">Sin cuenta seleccionada</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}">{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Restricciones / notas <textarea name="restricciones" rows="2" placeholder="Ej. no incluir fines de semana, priorizar zona metropolitana"></textarea></label>
+  <button type="submit" class="boton-primario">Crear proyecto (borrador)</button>
+  <p id="nuevo-proyecto-mensaje" class="perfil-nota" hidden></p>
+</form>
+
+<script>
+  window.DM_PLANIFICADOR_CREAR_URL = "{{ url_for('datos_meta.planificador_crear') }}";
+  window.DM_PLANIFICADOR_DETALLE_URL_BASE = "{{ url_for('datos_meta.planificador_detalle', proyecto_id=0) }}".replace("/0", "/__ID__");
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_planificador.js') }}"></script>
+{% endblock %}

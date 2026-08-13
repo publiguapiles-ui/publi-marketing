@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block titulo %}{{ datos.proyecto.nombre }} · Planificador{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>{{ datos.proyecto.nombre }}</h1>
+    <p class="perfil-nota">
+      <span class="estado-badge estado-badge-{{ 'activa' if datos.proyecto.estado == 'plan_aprobado' else 'expirada' }}">{{ "Plan aprobado" if datos.proyecto.estado == "plan_aprobado" else "Borrador" }}</span>
+      — {{ datos.proyecto.objetivo }} · KPI principal: {{ datos.etiquetas_kpi.get(datos.proyecto.kpi_principal, datos.proyecto.kpi_principal) }}
+    </p>
+  </div>
+  <a href="{{ url_for('datos_meta.planificador_lista') }}" class="boton-enlace">← Planificador</a>
+</div>
+
+<section>
+  <h2 class="ps-seccion-titulo">Resumen del proyecto</h2>
+  <dl class="perfil-datos">
+    <dt>Empresa</dt>
+    <dd>{{ empresa_activa.nombre }}</dd>
+    <dt>Objetivo</dt>
+    <dd>{{ datos.proyecto.objetivo }}</dd>
+    <dt>Capital total de pauta</dt>
+    <dd>{{ datos.proyecto.presupuesto_total }} {{ datos.proyecto.moneda }}</dd>
+    <dt>Período del proyecto</dt>
+    <dd>{{ datos.proyecto.fecha_inicio }} – {{ datos.proyecto.fecha_fin }}</dd>
+    <dt>KPI principal</dt>
+    <dd>{{ datos.etiquetas_kpi.get(datos.proyecto.kpi_principal, datos.proyecto.kpi_principal) }}</dd>
+    <dt>Resultado objetivo (meta del proyecto, no un resultado real)</dt>
+    <dd>{{ datos.proyecto.resultado_objetivo or "No definido" }}</dd>
+    {% if datos.proyecto.restricciones %}
+    <dt>Restricciones / notas</dt>
+    <dd>{{ datos.proyecto.restricciones }}</dd>
+    {% endif %}
+  </dl>
+  {% if datos.proyecto.estado == "borrador" %}
+  <button type="button" id="boton-aprobar-plan" class="boton-primario" data-proyecto-id="{{ datos.proyecto.id }}">Marcar como Plan aprobado</button>
+  {% else %}
+  <button type="button" id="boton-volver-borrador" class="boton-enlace" data-proyecto-id="{{ datos.proyecto.id }}">Volver a Borrador</button>
+  {% endif %}
+  <p id="estado-mensaje" class="perfil-nota" hidden></p>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Presupuesto</h2>
+  <dl class="perfil-datos">
+    <dt>Total</dt>
+    <dd>{{ datos.presupuesto.presupuesto_total }} {{ datos.proyecto.moneda }}</dd>
+    <dt>Asignado a fases</dt>
+    <dd>{{ datos.presupuesto.asignado }} {{ datos.proyecto.moneda }}</dd>
+    <dt>Disponible</dt>
+    <dd>{{ datos.presupuesto.disponible }} {{ datos.proyecto.moneda }}</dd>
+    <dt>% asignado</dt>
+    <dd>{{ datos.presupuesto.porcentaje_asignado }}%{% if datos.presupuesto.porcentaje_asignado is none %} —{% endif %}</dd>
+  </dl>
+  {% if datos.advertencia_distribucion %}
+  <div class="dm-oportunidad dm-oportunidad-medio">
+    <div class="dm-oportunidad-cabecera"><strong>Advertencia de distribución</strong></div>
+    <p>{{ datos.advertencia_distribucion }}</p>
+  </div>
+  {% endif %}
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Análisis histórico</h2>
+  <p class="perfil-nota">DATO HISTÓRICO — rendimiento real medido en el período de análisis (independiente del período futuro del proyecto, que todavía no tiene resultados).</p>
+  <form id="dm-filtros" class="formulario-simple dm-form-kpi" method="get">
+    <label>
+      Período de análisis
+      <select name="periodo">
+        {% for p in periodos %}
+        <option value="{{ p }}" {% if p == periodo_clave %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="boton-primario">Aplicar</button>
+  </form>
+  <p class="perfil-nota"><strong>{{ datos.analisis_historico.mensaje }}</strong></p>
+
+  {% if datos.analisis_historico.datos_suficientes %}
+  <h3 class="ps-seccion-titulo">Campañas anteriores</h3>
+  <div class="dm-tabla-scroll">
+  <table class="dm-tabla-kpi">
+    <thead><tr><th>Campaña</th><th>Inversión</th><th>Resultados</th><th>Costo por resultado</th><th>Rendimiento</th></tr></thead>
+    <tbody>
+      {% for fila in datos.analisis_historico.campanas %}
+      <tr>
+        <td>{{ fila.nombre }}</td>
+        <td>{{ fila.kpis.spend if fila.kpis.spend is not none else "No disponible" }}</td>
+        <td>{{ fila.kpis.resultados if fila.kpis.resultados is not none else "No disponible" }}</td>
+        <td>{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+        <td>
+          {% if fila.es_mejor %}<span class="dm-badge-mejor">Mejor</span>{% endif %}
+          {% if fila.es_peor %}<span class="dm-badge-peor">Peor</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h3 class="ps-seccion-titulo">Audiencias con mejor/peor rendimiento</h3>
+  <div class="dm-tabla-scroll">
+  <table class="dm-tabla-kpi">
+    <thead><tr><th>Conjunto</th><th>Campaña</th><th>Edades</th><th>Ubicaciones</th><th>Costo por resultado</th><th>Rendimiento</th></tr></thead>
+    <tbody>
+      {% for fila in datos.analisis_historico.audiencias %}
+      <tr>
+        <td>{{ fila.nombre }}</td>
+        <td>{{ fila.campana_nombre or "—" }}</td>
+        <td>{{ fila.targeting.edades if fila.targeting and fila.targeting.edades else "No disponible" }}</td>
+        <td>{{ fila.targeting.ubicaciones if fila.targeting and fila.targeting.ubicaciones else "No disponible" }}</td>
+        <td>{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+        <td>
+          {% if fila.es_mejor %}<span class="dm-badge-mejor">Mejor</span>{% endif %}
+          {% if fila.es_peor %}<span class="dm-badge-peor">Peor</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h3 class="ps-seccion-titulo">Mejor día del período</h3>
+  {% if datos.analisis_historico.mejor_dia %}
+  <p class="perfil-nota">DATO HISTÓRICO — {{ datos.analisis_historico.mejor_dia.fecha }}: costo por resultado {{ datos.analisis_historico.mejor_dia.costo_por_resultado }}.</p>
+  {% else %}
+  <p class="perfil-nota">No hay ningún día con costo por resultado disponible en este período.</p>
+  {% endif %}
+  {% endif %}
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Fases</h2>
+  <p class="perfil-nota">Los porcentajes no vienen prellenados por el sistema — cada fase se define manualmente y la suma nunca puede superar el presupuesto total.</p>
+  {% if datos.etapas %}
+  <div class="dm-tabla-scroll">
+  <table class="dm-tabla-kpi">
+    <thead><tr><th>Fase</th><th>Objetivo</th><th>Presupuesto</th><th>%</th><th>KPI esperado</th><th>Audiencia</th><th>Duración</th><th></th></tr></thead>
+    <tbody>
+      {% for etapa in datos.etapas %}
+      <tr>
+        <td>{{ etapa.nombre }}</td>
+        <td>{{ etapa.objetivo or "—" }}</td>
+        <td>{{ etapa.presupuesto }} {{ datos.proyecto.moneda }}</td>
+        <td>{{ ((etapa.presupuesto / datos.proyecto.presupuesto_total) * 100) | round(1) if datos.proyecto.presupuesto_total else "—" }}%</td>
+        <td>{{ datos.etiquetas_kpi.get(etapa.kpi_esperado, etapa.kpi_esperado) if etapa.kpi_esperado else "—" }}</td>
+        <td>{{ etapa.audiencia_descripcion or "No definida" }}</td>
+        <td>{{ etapa.duracion_dias ~ " días" if etapa.duracion_dias else "—" }}</td>
+        <td><button type="button" class="boton-enlace dm-boton-eliminar-etapa" data-etapa-id="{{ etapa.id }}">Eliminar</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="perfil-nota">Todavía no hay ninguna fase definida.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Agregar fase</h2>
+  <form id="form-nueva-etapa" class="formulario-simple">
+    <label>Nombre <input type="text" name="nombre" placeholder="Reconocimiento" required /></label>
+    <label>Objetivo <input type="text" name="objetivo" placeholder="Alcance" /></label>
+    <label>Presupuesto <input type="number" name="presupuesto" min="0" step="0.01" required /></label>
+    <label>
+      KPI esperado
+      <select name="kpi_esperado">
+        <option value="">Sin especificar</option>
+        {% for clave in datos.claves_kpi %}
+        <option value="{{ clave }}">{{ datos.etiquetas_kpi.get(clave, clave) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Audiencia (estrategia, texto libre) <input type="text" name="audiencia_descripcion" placeholder="Personas que interactuaron en los últimos 90 días" /></label>
+    <label>Duración (días) <input type="number" name="duracion_dias" min="1" step="1" /></label>
+    <button type="submit" class="boton-primario">Agregar fase</button>
+    <p id="nueva-etapa-mensaje" class="perfil-nota" hidden></p>
+  </form>
+</section>
+
+<script>
+  window.DM_PLANIFICADOR_PROYECTO_ID = {{ datos.proyecto.id }};
+  window.DM_PLANIFICADOR_ESTADO_URL = "{{ url_for('datos_meta.planificador_cambiar_estado', proyecto_id=datos.proyecto.id) }}";
+  window.DM_PLANIFICADOR_ETAPAS_URL = "{{ url_for('datos_meta.planificador_agregar_etapa', proyecto_id=datos.proyecto.id) }}";
+  window.DM_PLANIFICADOR_ETAPA_ELIMINAR_URL_BASE = "{{ url_for('datos_meta.planificador_eliminar_etapa', proyecto_id=datos.proyecto.id, etapa_id=0) }}".replace("/0/eliminar", "/__ID__/eliminar");
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_planificador.js') }}"></script>
+{% endblock %}

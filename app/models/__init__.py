@@ -38,6 +38,7 @@ from app.models.metrica import (
     ORIGENES_METRICA,
 )
 from app.models.presupuesto import PresupuestoPauta, TIPOS_PRESUPUESTO, PERIODOS_PRESUPUESTO
+from app.models.proyecto_pauta import ProyectoPauta, EtapaProyectoPauta, ESTADOS_PROYECTO_PAUTA
 
 __all__ = [
     "Usuario",
@@ -82,4 +83,7 @@ __all__ = [
     "PresupuestoPauta",
     "TIPOS_PRESUPUESTO",
     "PERIODOS_PRESUPUESTO",
+    "ProyectoPauta",
+    "EtapaProyectoPauta",
+    "ESTADOS_PROYECTO_PAUTA",
 ]

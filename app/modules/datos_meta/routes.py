@@ -56,6 +56,15 @@ from app.services.meta.sincronizacion import (
     obtener_ultima_sincronizacion,
     reintentar_sincronizacion,
 )
+from app.services.meta.planificador import (
+    agregar_etapa,
+    cambiar_estado_proyecto,
+    construir_paquete_planificador,
+    crear_proyecto,
+    eliminar_etapa,
+    listar_proyectos_empresa,
+    obtener_proyecto,
+)
 from app.services.periodos import ETIQUETAS_PERIODOS, PERIODOS_PREDEFINIDOS, resolver_periodo
 from app.services.presupuestos import (
     calcular_resumen_presupuesto,
@@ -63,6 +72,7 @@ from app.services.presupuestos import (
     eliminar_presupuesto,
     obtener_presupuestos_empresa,
 )
+from app.models import ESTADOS_PROYECTO_PAUTA
 
 datos_meta_bp = Blueprint("datos_meta", __name__, url_prefix="/datos-meta")
 
@@ -821,3 +831,175 @@ def audiencias_datos():
 
     paquete, error = analizar_audiencias(empresa.id, cuenta_id, periodo["fecha_inicio"], periodo["fecha_fin"])
     return jsonify(_serializar_audiencias(paquete, error, cuenta_id, periodo))
+
+
+# --- Planificador estrategico de pauta (Paso 7) -----------------------------------
+#
+# Reutiliza exclusivamente app/services/meta/planificador.py (que a su
+# vez reutiliza kpi.py del Paso 3 y analisis.py del Paso 5) -- ningun
+# calculo de KPI nuevo. NUNCA crea, modifica ni programa nada en Meta:
+# el planificador solo administra un plan que vive en nuestra base de
+# datos (ProyectoPauta/EtapaProyectoPauta).
+
+def _serializar_proyecto(proyecto):
+    return {
+        "id": proyecto.id,
+        "nombre": proyecto.nombre,
+        "objetivo": proyecto.objetivo,
+        "kpi_principal": proyecto.kpi_principal,
+        "presupuesto_total": proyecto.presupuesto_total,
+        "moneda": proyecto.moneda,
+        "fecha_inicio": proyecto.fecha_inicio.isoformat(),
+        "fecha_fin": proyecto.fecha_fin.isoformat(),
+        "resultado_objetivo": proyecto.resultado_objetivo,
+        "restricciones": proyecto.restricciones,
+        "cuenta_publicitaria_id": proyecto.cuenta_publicitaria_id,
+        "estado": proyecto.estado,
+    }
+
+
+def _serializar_etapa(etapa):
+    return {
+        "id": etapa.id,
+        "nombre": etapa.nombre,
+        "objetivo": etapa.objetivo,
+        "presupuesto": etapa.presupuesto,
+        "kpi_esperado": etapa.kpi_esperado,
+        "audiencia_descripcion": etapa.audiencia_descripcion,
+        "duracion_dias": etapa.duracion_dias,
+        "orden": etapa.orden,
+    }
+
+
+def _serializar_paquete_planificador(paquete):
+    analisis = paquete["analisis_historico"]
+    return {
+        "proyecto": _serializar_proyecto(paquete["proyecto"]),
+        "etapas": [_serializar_etapa(e) for e in paquete["proyecto"].etapas],
+        "presupuesto": paquete["presupuesto"],
+        "advertencia_distribucion": paquete["advertencia_distribucion"],
+        "periodo_analisis": {
+            "fecha_inicio": paquete["periodo_analisis"]["fecha_inicio"].isoformat(),
+            "fecha_fin": paquete["periodo_analisis"]["fecha_fin"].isoformat(),
+        },
+        "analisis_historico": {
+            "datos_suficientes": analisis["datos_suficientes"],
+            "mensaje": analisis["mensaje"],
+            "campanas": [_serializar_fila_kpi(f) for f in analisis["campanas"]],
+            "audiencias": [_serializar_fila_kpi(f, incluir_targeting=True) for f in analisis["audiencias"]],
+            "mejor_dia": (
+                {**analisis["mejor_dia"], "fecha": analisis["mejor_dia"]["fecha"].isoformat()}
+                if analisis["mejor_dia"] else None
+            ),
+        },
+        "claves_kpi": CLAVES_KPI,
+        "etiquetas_kpi": ETIQUETAS_KPI,
+    }
+
+
+@datos_meta_bp.get("/planificador")
+@login_required
+def planificador_lista():
+    empresa, _rol = _empresa_activa_o_404()
+    proyectos = listar_proyectos_empresa(empresa.id)
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+
+    return render_template(
+        "datos_meta/planificador_lista.html",
+        empresa_activa=empresa,
+        proyectos=proyectos,
+        cuentas=cuentas,
+        claves_kpi=CLAVES_KPI,
+        etiquetas_kpi=ETIQUETAS_KPI,
+    )
+
+
+@datos_meta_bp.post("/planificador/crear")
+@login_required
+def planificador_crear():
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+
+    datos = request.get_json(silent=True) or {}
+    try:
+        if datos.get("fecha_inicio"):
+            datos["fecha_inicio"] = datetime.date.fromisoformat(datos["fecha_inicio"])
+        if datos.get("fecha_fin"):
+            datos["fecha_fin"] = datetime.date.fromisoformat(datos["fecha_fin"])
+    except ValueError:
+        return jsonify({"ok": False, "error": "Formato de fecha inválido."}), 400
+
+    proyecto, error = crear_proyecto(empresa.id, usuario["id"], datos)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "proyecto_id": proyecto.id}), 201
+
+
+@datos_meta_bp.get("/planificador/<int:proyecto_id>")
+@login_required
+def planificador_detalle(proyecto_id):
+    empresa, _rol = _empresa_activa_o_404()
+    proyecto = obtener_proyecto(empresa.id, proyecto_id)
+    if proyecto is None:
+        abort(404)
+
+    periodo = _leer_periodo_y_comparar(request.args)
+    paquete = construir_paquete_planificador(proyecto, periodo["fecha_inicio"], periodo["fecha_fin"])
+
+    return render_template(
+        "datos_meta/planificador_detalle.html",
+        empresa_activa=empresa,
+        cuentas=listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria"),
+        datos=_serializar_paquete_planificador(paquete),
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+        periodo_clave=periodo["periodo_clave"],
+        estados_proyecto=ESTADOS_PROYECTO_PAUTA,
+    )
+
+
+@datos_meta_bp.get("/planificador/<int:proyecto_id>/datos")
+@login_required
+def planificador_datos(proyecto_id):
+    empresa, _rol = _empresa_activa_o_404()
+    proyecto = obtener_proyecto(empresa.id, proyecto_id)
+    if proyecto is None:
+        return jsonify({"ok": False, "error": "El proyecto no existe o no pertenece a esta empresa."}), 404
+
+    periodo = _leer_periodo_y_comparar(request.args)
+    paquete = construir_paquete_planificador(proyecto, periodo["fecha_inicio"], periodo["fecha_fin"])
+    return jsonify(_serializar_paquete_planificador(paquete))
+
+
+@datos_meta_bp.post("/planificador/<int:proyecto_id>/estado")
+@login_required
+def planificador_cambiar_estado(proyecto_id):
+    empresa, _rol = _empresa_activa_o_404()
+    datos = request.get_json(silent=True) or {}
+
+    proyecto, error = cambiar_estado_proyecto(empresa.id, proyecto_id, datos.get("estado"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "estado": proyecto.estado})
+
+
+@datos_meta_bp.post("/planificador/<int:proyecto_id>/etapas")
+@login_required
+def planificador_agregar_etapa(proyecto_id):
+    empresa, _rol = _empresa_activa_o_404()
+    datos = request.get_json(silent=True) or {}
+
+    etapa, error = agregar_etapa(empresa.id, proyecto_id, datos)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "etapa_id": etapa.id}), 201
+
+
+@datos_meta_bp.post("/planificador/<int:proyecto_id>/etapas/<int:etapa_id>/eliminar")
+@login_required
+def planificador_eliminar_etapa(proyecto_id, etapa_id):
+    empresa, _rol = _empresa_activa_o_404()
+    ok, error = eliminar_etapa(empresa.id, proyecto_id, etapa_id)
+    if not ok:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True})

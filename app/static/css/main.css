@@ -256,12 +256,14 @@ body {
 }
 
 .formulario-simple input,
-.formulario-simple select {
+.formulario-simple select,
+.formulario-simple textarea {
   padding: 10px 12px;
   border: 1px solid var(--color-borde);
   border-radius: 6px;
   font-size: 14px;
   font-family: inherit;
+  resize: vertical;
 }
 
 .dashboard-empresa-activa {
