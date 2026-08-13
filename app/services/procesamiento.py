@@ -179,37 +179,47 @@ def _mascara_proteccion_rostros(tamano, rostros, expansion=0.25, difuminado_px=1
     return mascara
 
 
-def _ajustar_exposicion(imagen, analisis, objetivo_brillo=0.5):
+def _ajustar_exposicion(imagen, analisis, objetivo_brillo=0.5, intensidad=1.0):
     """Correccion por gamma (no un +/-% fijo): protege altas luces y
     sombras profundas mucho mejor que escalar el brillo linealmente.
 
-    `objetivo_brillo` es el unico grado de libertad que un preset
-    (Paso 10) puede sesgar -- el mecanismo (gamma proporcional a la
-    distancia al objetivo) no cambia, así que una foto lejos del
-    objetivo sigue recibiendo mas correccion que una ya cercana.
+    `objetivo_brillo` es el grado de libertad que un preset (Paso 10)
+    puede sesgar; `intensidad` (Paso 11, 0..1) mezcla el resultado con
+    el original -- 1.0 (por defecto, igual que antes del Paso 11) es
+    la correccion completa, valores menores dejan una version mas
+    sutil sin cambiar el objetivo en si (un preset "moderado" reduce
+    la intensidad, no el objetivo).
     """
     diferencia = objetivo_brillo - analisis["brillo_promedio"]
-    if abs(diferencia) <= 0.03:
+    if abs(diferencia) <= 0.03 or intensidad <= 0:
         return imagen
     gamma = float(np.clip(1.0 - diferencia * 0.9, 0.6, 1.6))
-    arr = np.asarray(imagen).astype(np.float32) / 255.0
-    arr = np.power(arr, gamma)
-    return Image.fromarray(np.clip(arr * 255, 0, 255).astype(np.uint8))
+    arr_original = np.asarray(imagen).astype(np.float32)
+    arr_corregida = np.power(arr_original / 255.0, gamma) * 255.0
+    intensidad = float(np.clip(intensidad, 0.0, 1.0))
+    arr_final = arr_original * (1 - intensidad) + arr_corregida * intensidad
+    return Image.fromarray(np.clip(arr_final, 0, 255).astype(np.uint8))
 
 
-def _ajustar_balance_blancos(imagen, analisis, sesgo_calidez=0.0):
+def _ajustar_balance_blancos(imagen, analisis, sesgo_calidez=0.0, intensidad=1.0):
     """Correccion PARCIAL (50%) hacia gris neutro -- nunca neutraliza
     del todo, para respetar la intencion visual de la escena (ver
     restriccion del Paso 7 sobre balance de blancos).
 
     `sesgo_calidez` (Paso 10, -1..1) empuja el resultado un poco mas
     alla del neutro: positivo = mas calido, negativo = mas frio. Con
-    sesgo 0.0 (preset "Automatico") el rango de recorte es exactamente
-    el mismo (0.85-1.15) que antes de este paso -- el comportamiento
-    por defecto no cambia ni un bit.
+    sesgo 0.0 e intensidad 1.0 (preset "Automatico") el rango de
+    recorte es exactamente el mismo (0.85-1.15) que antes del Paso 10
+    -- el comportamiento por defecto no cambia ni un bit.
+
+    `intensidad` (Paso 11, 0..1) mezcla el resultado con el original:
+    permite un preset "temperatura cálida, pero sutil" sin tener que
+    reducir `sesgo_calidez` en si (que tambien controla la DIRECCION).
     """
-    arr = np.asarray(imagen).astype(np.float32)
-    r_medio, g_medio, b_medio = arr[..., 0].mean(), arr[..., 1].mean(), arr[..., 2].mean()
+    if intensidad <= 0:
+        return imagen
+    arr_original = np.asarray(imagen).astype(np.float32)
+    r_medio, g_medio, b_medio = arr_original[..., 0].mean(), arr_original[..., 1].mean(), arr_original[..., 2].mean()
     gris_medio = (r_medio + g_medio + b_medio) / 3
     if gris_medio < 1:
         return imagen
@@ -222,37 +232,57 @@ def _ajustar_balance_blancos(imagen, analisis, sesgo_calidez=0.0):
     margen = 0.15 + abs(sesgo_calidez) * 0.15
     factor_r = float(np.clip(factor_r, 1 - margen, 1 + margen))
     factor_b = float(np.clip(factor_b, 1 - margen, 1 + margen))
-    arr[..., 0] = arr[..., 0] * factor_r
-    arr[..., 2] = arr[..., 2] * factor_b
-    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+    arr_corregida = arr_original.copy()
+    arr_corregida[..., 0] = arr_original[..., 0] * factor_r
+    arr_corregida[..., 2] = arr_original[..., 2] * factor_b
+
+    intensidad = float(np.clip(intensidad, 0.0, 1.0))
+    arr_final = arr_original * (1 - intensidad) + arr_corregida * intensidad
+    return Image.fromarray(np.clip(arr_final, 0, 255).astype(np.uint8))
 
 
-def _ajustar_contraste(imagen, analisis, objetivo_contraste=0.22):
-    if analisis["contraste"] >= objetivo_contraste:
+def _ajustar_contraste(imagen, analisis, objetivo_contraste=0.22, intensidad=1.0):
+    """`intensidad` (Paso 11, 0..1) mezcla el resultado con el original
+    via Image.blend -- en 1.0 (por defecto) es identico byte a byte al
+    comportamiento previo al Paso 11 (Image.blend(a, b, 1.0) == b)."""
+    if analisis["contraste"] >= objetivo_contraste or intensidad <= 0:
         return imagen  # ya tiene buen contraste: no forzar mas (evita clipping)
     factor = float(np.clip(1 + (objetivo_contraste - analisis["contraste"]) * 1.5, 1.0, 1.3))
-    return ImageEnhance.Contrast(imagen).enhance(factor)
+    corregida = ImageEnhance.Contrast(imagen).enhance(factor)
+    if intensidad >= 1.0:
+        return corregida
+    return Image.blend(imagen, corregida, float(np.clip(intensidad, 0.0, 1.0)))
 
 
-def _ajustar_saturacion(imagen, analisis, objetivo_saturacion=0.35, factor_maximo_saturacion=1.35):
+def _ajustar_saturacion(imagen, analisis, objetivo_saturacion=0.35, factor_maximo_saturacion=1.35, intensidad=1.0):
     """Aproximacion de "vibrance": cuanto mas apagados esten los colores
     mayor es el impulso; si ya estan vivos, el ajuste es minimo (evita
     piel naranja, cielos irreales, vegetacion artificial).
 
     `factor_maximo_saturacion` es el techo absoluto (Paso 10): incluso
     el preset "Vibrante" lo mantiene moderado, nunca sobresaturado.
+    `intensidad` (Paso 11, 0..1) mezcla con el original, igual que en
+    _ajustar_contraste.
     """
+    if intensidad <= 0:
+        return imagen
     if analisis["saturacion_media"] >= objetivo_saturacion:
         factor = 1.05
     else:
         factor = float(np.clip(1 + (objetivo_saturacion - analisis["saturacion_media"]) * 1.2, 1.05, factor_maximo_saturacion))
-    return ImageEnhance.Color(imagen).enhance(factor)
+    corregida = ImageEnhance.Color(imagen).enhance(factor)
+    if intensidad >= 1.0:
+        return corregida
+    return Image.blend(imagen, corregida, float(np.clip(intensidad, 0.0, 1.0)))
 
 
 def _ajustar_nitidez(imagen, intensidad_nitidez=80):
     ancho, alto = imagen.size
     radio = max(1, min(3, round(max(ancho, alto) / 1000)))
-    return imagen.filter(ImageFilter.UnsharpMask(radius=radio, percent=intensidad_nitidez, threshold=3))
+    # PIL exige un int para "percent" -- un preset normalizado (Paso 11)
+    # puede traer este valor como float (ej. 80.0), asi que se redondea
+    # aqui explicitamente en vez de confiar en el tipo del llamador.
+    return imagen.filter(ImageFilter.UnsharpMask(radius=radio, percent=round(intensidad_nitidez), threshold=3))
 
 
 def _reducir_ruido_si_hace_falta(imagen, analisis):
@@ -267,12 +297,24 @@ def _reducir_ruido_si_hace_falta(imagen, analisis):
 # `presets.py` los replica en su entrada "automatico"; se mantienen
 # duplicados a proposito (procesamiento.py no depende de presets.py)
 # para que este modulo siga siendo utilizable de forma aislada.
+#
+# Paso 11: se agregan las "intensidad_*" (0..1, por defecto 1.0 = 100%
+# de la correccion, EXACTAMENTE el comportamiento que existia antes de
+# este paso). Un preset que no las incluya se comporta como siempre;
+# solo un preset que las baje deliberadamente aplica una version mas
+# sutil de la misma correccion -- nunca es un filtro nuevo, es la
+# MISMA correccion adaptativa mezclada con el original en proporcion
+# variable (ver _ajustar_exposicion/_ajustar_contraste/etc.).
 PARAMETROS_POR_DEFECTO = {
     "objetivo_brillo": 0.5,
+    "intensidad_exposicion": 1.0,
     "objetivo_contraste": 0.22,
+    "intensidad_contraste": 1.0,
     "objetivo_saturacion": 0.35,
     "factor_maximo_saturacion": 1.35,
+    "intensidad_saturacion": 1.0,
     "sesgo_calidez": 0.0,
+    "intensidad_calidez": 1.0,
     "intensidad_nitidez": 80,
 }
 
@@ -329,10 +371,10 @@ def mejorar_fotografia(bytes_originales, preset=None, contexto_sesion=None):
     categoria, confianza = clasificar_imagen(analisis, rostros)
 
     corregida = imagen
-    corregida = _ajustar_exposicion(corregida, analisis, parametros["objetivo_brillo"])
-    corregida = _ajustar_balance_blancos(corregida, analisis, parametros["sesgo_calidez"])
-    corregida = _ajustar_contraste(corregida, analisis, parametros["objetivo_contraste"])
-    corregida = _ajustar_saturacion(corregida, analisis, parametros["objetivo_saturacion"], parametros["factor_maximo_saturacion"])
+    corregida = _ajustar_exposicion(corregida, analisis, parametros["objetivo_brillo"], parametros["intensidad_exposicion"])
+    corregida = _ajustar_balance_blancos(corregida, analisis, parametros["sesgo_calidez"], parametros["intensidad_calidez"])
+    corregida = _ajustar_contraste(corregida, analisis, parametros["objetivo_contraste"], parametros["intensidad_contraste"])
+    corregida = _ajustar_saturacion(corregida, analisis, parametros["objetivo_saturacion"], parametros["factor_maximo_saturacion"], parametros["intensidad_saturacion"])
     corregida = _ajustar_nitidez(corregida, parametros["intensidad_nitidez"])
     corregida, ruido_reducido = _reducir_ruido_si_hace_falta(corregida, analisis)
 

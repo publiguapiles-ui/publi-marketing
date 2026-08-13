@@ -14,7 +14,10 @@
 {% else %}
 <div class="cabecera-seccion">
   <span class="empresa-activa-badge">Empresa activa: <strong>{{ empresa_activa.nombre }}</strong></span>
-  <a href="{{ url_for('fotografia.proyecto_nuevo') }}" class="boton-primario">+ Nuevo proyecto</a>
+  <div>
+    <a href="{{ url_for('fotografia.presets_biblioteca') }}" class="boton-secundario">Presets</a>
+    <a href="{{ url_for('fotografia.proyecto_nuevo') }}" class="boton-primario">+ Nuevo proyecto</a>
+  </div>
 </div>
 
 <h2 class="ps-seccion-titulo">Proyectos</h2>

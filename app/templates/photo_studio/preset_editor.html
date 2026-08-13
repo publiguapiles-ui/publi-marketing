@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block titulo %}{% if modo == "crear" %}Nuevo preset{% else %}{{ preset.nombre }}{% endif %} · Presets{% endblock %}
+{% block contenido %}
+{% set p = (preset.parametros if preset else {}) or {} %}
+{% set av = p.get("avanzado", {}) if p else {} %}
+<div class="ps-sesion">
+  <div class="ps-sesion-cabecera">
+    <div>
+      <a href="{{ url_for('fotografia.presets_biblioteca') }}" class="ps-enlace-discreto">← Presets</a>
+      <h1 class="ps-sesion-titulo">
+        {% if modo == "crear" %}Nuevo preset{% else %}{{ preset.nombre }}{% endif %}
+      </h1>
+      <p class="ps-sesion-sub">
+        {% if preset and not preset.es_sistema %}Preset personalizado · versión {{ preset.version }}
+        {% elif preset and preset.es_sistema %}Preset del sistema · solo lectura
+        {% else %}Define el estilo: el motor adapta cada objetivo a cada fotografía, nunca aplica un valor fijo.{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% if error %}<div class="mensaje-error">{{ error }}</div>{% endif %}
+
+  {% if solo_lectura %}
+  <div class="ps-caja-oscura ps-aviso-solo-lectura">
+    <p>Los presets del sistema están protegidos y no se pueden modificar directamente.</p>
+    <button type="button" id="boton-crear-copia" class="boton-primario-oscuro" data-preset-id="{{ preset.id }}">Crear una copia personalizada</button>
+  </div>
+  {% endif %}
+
+  <div class="ps-editor-layout">
+    <form id="form-preset" class="ps-formulario-preset" {% if solo_lectura %}data-solo-lectura="1"{% endif %}>
+      <label>
+        Nombre
+        <input type="text" name="nombre" value="{{ preset.nombre if preset else '' }}" {% if solo_lectura %}disabled{% endif %} required />
+      </label>
+      <label>
+        Descripción
+        <textarea name="descripcion" rows="2" {% if solo_lectura %}disabled{% endif %}>{{ preset.descripcion if preset else '' }}</textarea>
+      </label>
+      <label>
+        Categoría
+        <select name="categoria" {% if solo_lectura %}disabled{% endif %}>
+          <option value="">Sin categoría</option>
+          {% for cat in categorias %}
+          <option value="{{ cat }}" {% if preset and preset.categoria == cat %}selected{% endif %}>{{ cat|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <fieldset class="ps-seccion-editor">
+        <legend>Exposición</legend>
+        <label class="ps-campo-slider">
+          Objetivo de brillo
+          <input type="range" name="objetivo_brillo" min="0" max="1" step="0.01" value="{{ p.get('objetivo_brillo', campos_motor.objetivo_brillo[2]) }}" />
+          <output>{{ p.get('objetivo_brillo', campos_motor.objetivo_brillo[2]) }}</output>
+        </label>
+        <label class="ps-campo-slider">
+          Intensidad
+          <input type="range" name="intensidad_exposicion" min="0" max="1" step="0.05" value="{{ p.get('intensidad_exposicion', 1.0) }}" />
+          <output>{{ p.get('intensidad_exposicion', 1.0) }}</output>
+        </label>
+      </fieldset>
+
+      <fieldset class="ps-seccion-editor">
+        <legend>Contraste</legend>
+        <label class="ps-campo-slider">
+          Objetivo de contraste
+          <input type="range" name="objetivo_contraste" min="0" max="1" step="0.01" value="{{ p.get('objetivo_contraste', campos_motor.objetivo_contraste[2]) }}" />
+          <output>{{ p.get('objetivo_contraste', campos_motor.objetivo_contraste[2]) }}</output>
+        </label>
+        <label class="ps-campo-slider">
+          Intensidad
+          <input type="range" name="intensidad_contraste" min="0" max="1" step="0.05" value="{{ p.get('intensidad_contraste', 1.0) }}" />
+          <output>{{ p.get('intensidad_contraste', 1.0) }}</output>
+        </label>
+      </fieldset>
+
+      <fieldset class="ps-seccion-editor">
+        <legend>Color</legend>
+        <label class="ps-campo-slider">
+          Temperatura (frío ↔ cálido)
+          <input type="range" name="sesgo_calidez" min="-1" max="1" step="0.05" value="{{ p.get('sesgo_calidez', 0.0) }}" />
+          <output>{{ p.get('sesgo_calidez', 0.0) }}</output>
+        </label>
+        <label class="ps-campo-slider">
+          Intensidad de temperatura
+          <input type="range" name="intensidad_calidez" min="0" max="1" step="0.05" value="{{ p.get('intensidad_calidez', 1.0) }}" />
+          <output>{{ p.get('intensidad_calidez', 1.0) }}</output>
+        </label>
+        <label class="ps-campo-slider">
+          Objetivo de saturación
+          <input type="range" name="objetivo_saturacion" min="0" max="1" step="0.01" value="{{ p.get('objetivo_saturacion', campos_motor.objetivo_saturacion[2]) }}" />
+          <output>{{ p.get('objetivo_saturacion', campos_motor.objetivo_saturacion[2]) }}</output>
+        </label>
+        <label class="ps-campo-slider">
+          Límite máximo de saturación
+          <input type="range" name="factor_maximo_saturacion" min="1" max="2" step="0.05" value="{{ p.get('factor_maximo_saturacion', 1.35) }}" />
+          <output>{{ p.get('factor_maximo_saturacion', 1.35) }}</output>
+        </label>
+        <label class="ps-campo-slider">
+          Intensidad de saturación
+          <input type="range" name="intensidad_saturacion" min="0" max="1" step="0.05" value="{{ p.get('intensidad_saturacion', 1.0) }}" />
+          <output>{{ p.get('intensidad_saturacion', 1.0) }}</output>
+        </label>
+        <p class="ps-nota-reservado">Matiz y vibrance quedan reservados para una próxima etapa del motor.</p>
+      </fieldset>
+
+      <fieldset class="ps-seccion-editor">
+        <legend>Tonos <span class="ps-etiqueta-reservado">próximamente</span></legend>
+        <p class="ps-nota-reservado">Sombras, luces, blancos y negros ya se guardan en el preset, pero el motor todavía no los aplica -- quedan preparados para una etapa futura.</p>
+        <label class="ps-campo-slider">
+          Elevar sombras
+          <input type="range" name="avanzado_sombras_elevacion" min="0" max="1" step="0.05" value="{{ av.get('sombras_elevacion', 0.0) }}" disabled />
+          <output>{{ av.get('sombras_elevacion', 0.0) }}</output>
+        </label>
+        <label class="ps-campo-slider">
+          Reducir luces
+          <input type="range" name="avanzado_luces_reduccion" min="0" max="1" step="0.05" value="{{ av.get('luces_reduccion', 0.0) }}" disabled />
+          <output>{{ av.get('luces_reduccion', 0.0) }}</output>
+        </label>
+      </fieldset>
+
+      <fieldset class="ps-seccion-editor">
+        <legend>Detalle</legend>
+        <label class="ps-campo-slider">
+          Nitidez
+          <input type="range" name="intensidad_nitidez" min="0" max="150" step="5" value="{{ p.get('intensidad_nitidez', 80) }}" />
+          <output>{{ p.get('intensidad_nitidez', 80) }}</output>
+        </label>
+        <label class="ps-campo-slider">
+          Reducción de ruido <span class="ps-etiqueta-reservado">próximamente</span>
+          <input type="range" name="avanzado_reduccion_ruido_intensidad" min="0" max="1" step="0.05" value="{{ av.get('reduccion_ruido_intensidad', 0.0) }}" disabled />
+          <output>{{ av.get('reduccion_ruido_intensidad', 0.0) }}</output>
+        </label>
+      </fieldset>
+
+      {% if not solo_lectura %}
+      <div class="ps-sesion-acciones">
+        <button type="submit" id="boton-guardar-preset" class="boton-primario-oscuro">Guardar preset</button>
+        <button type="button" id="boton-restablecer-preset" class="boton-secundario-oscuro">Restablecer</button>
+        {% if preset %}
+        <button type="button" id="boton-duplicar-preset" class="boton-secundario-oscuro" data-preset-id="{{ preset.id }}">Duplicar</button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </form>
+
+    <div class="ps-panel-preview ps-caja-oscura">
+      <h2>Vista previa</h2>
+      {% if fotos_muestra %}
+      <label>
+        Fotografía de muestra
+        <select id="preset-foto-muestra">
+          {% for foto in fotos_muestra %}
+          <option value="{{ foto.id }}">{{ foto.nombre_archivo_original }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="ps-antes-despues">
+        <div>
+          <span class="ps-antes-despues-etiqueta">Antes</span>
+          <img id="preset-preview-antes" alt="Antes" />
+        </div>
+        <div>
+          <span class="ps-antes-despues-etiqueta">Después</span>
+          <img id="preset-preview-despues" alt="Después" />
+          <div id="preset-preview-cargando" class="ps-preview-cargando" hidden>Procesando…</div>
+        </div>
+      </div>
+      {% else %}
+      <p class="ps-sesion-sub">No hay fotografías disponibles todavía para previsualizar.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  window.PS_PRESET_ID = {{ preset.id if preset else "null" }};
+  window.PS_PRESET_SOLO_LECTURA = {{ "true" if solo_lectura else "false" }};
+  window.PS_PRESET_GUARDAR_URL = {% if modo == "crear" %}"{{ url_for('fotografia.preset_nuevo') }}"{% else %}"{{ url_for('fotografia.preset_editar', preset_id=preset.id) }}"{% endif %};
+  window.PS_PRESET_DUPLICAR_URL = {% if preset %}"{{ url_for('fotografia.preset_duplicar', preset_id=preset.id) }}"{% else %}null{% endif %};
+  window.PS_PRESET_VISTA_PREVIA_URL_BASE = "{{ url_for('fotografia.foto_preset_vista_previa', fotografia_id=0) }}".replace("/0/", "/__ID__/");
+  window.PS_PRESET_EDITAR_URL_BASE = "{{ url_for('fotografia.preset_editar_formulario', preset_id=0) }}".replace("/0/", "/__ID__/");
+  window.PS_FOTOS_MUESTRA_URLS = {
+    {% for foto, url in fotos_muestra_urls %}"{{ foto.id }}": "{{ url }}",{% endfor %}
+  };
+</script>
+<script src="{{ url_for('static', filename='js/preset_editor.js') }}"></script>
+{% endblock %}

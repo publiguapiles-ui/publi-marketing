@@ -90,6 +90,15 @@ class FotografiaDerivada(db.Model):
     sesion_id = db.Column(db.Integer, db.ForeignKey("sesiones_fotograficas.id", ondelete="SET NULL"), nullable=True, index=True)
     preset_id = db.Column(db.Integer, db.ForeignKey("presets.id", ondelete="SET NULL"), nullable=True)
 
+    # Paso 11: snapshot INMUTABLE de que preset se uso, tomado en el
+    # momento del procesamiento -- independiente de `preset_id` (que es
+    # una FK viva y puede quedar en NULL si el preset se elimina, o
+    # seguir apuntando a un preset cuyo `parametros`/`version` cambio
+    # despues). Un derivado ya generado debe seguir mostrando "Publi
+    # Cálido v1" aunque el preset en si ya sea v2 o ya no exista.
+    preset_nombre = db.Column(db.String(60), nullable=True)
+    preset_version = db.Column(db.Integer, nullable=True)
+
     creado_por = db.Column(db.String(36), db.ForeignKey("usuarios.id"), nullable=True)
 
     creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titulo %}Presets · Photo Studio{% endblock %}
+{% block contenido %}
+<div class="ps-sesion">
+  <div class="ps-sesion-cabecera">
+    <div>
+      <a href="{{ url_for('fotografia.index') }}" class="ps-enlace-discreto">← Photo Studio</a>
+      <h1 class="ps-sesion-titulo">Presets</h1>
+      <p class="ps-sesion-sub">Estilos fotográficos reutilizables. Cada preset define objetivos que el motor adapta a cada fotografía -- nunca es un filtro fijo.</p>
+    </div>
+    <div class="ps-sesion-acciones">
+      <a href="{{ url_for('fotografia.preset_nuevo_formulario') }}" class="boton-primario-oscuro">+ Nuevo preset</a>
+    </div>
+  </div>
+
+  {% if not fotos_muestra %}
+  <p class="ps-sesion-sub">Sube fotografías a un proyecto para poder previsualizar los presets con una imagen real.</p>
+  {% endif %}
+
+  {% if grupos.favoritos %}
+  <section class="ps-caja-oscura">
+    <h2>★ Favoritos</h2>
+    <div class="ps-grilla-presets">
+      {% for preset in grupos.favoritos %}
+      {% include "photo_studio/_tarjeta_preset.html" %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="ps-caja-oscura">
+    <h2>Presets del sistema</h2>
+    <div class="ps-grilla-presets">
+      {% for preset in grupos.sistema %}
+      {% include "photo_studio/_tarjeta_preset.html" %}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="ps-caja-oscura">
+    <h2>Mis presets</h2>
+    {% if grupos.personalizados %}
+    <div class="ps-grilla-presets">
+      {% for preset in grupos.personalizados %}
+      {% include "photo_studio/_tarjeta_preset.html" %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="ps-sesion-sub">Todavía no tienes presets personalizados. Crea uno nuevo o duplica uno del sistema para empezar.</p>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+  window.PS_FAVORITO_URL_BASE = "{{ url_for('fotografia.preset_favorito', preset_id=0) }}".replace("/0/", "/__ID__/");
+  window.PS_DUPLICAR_URL_BASE = "{{ url_for('fotografia.preset_duplicar', preset_id=0) }}".replace("/0/", "/__ID__/");
+  window.PS_ELIMINAR_URL_BASE = "{{ url_for('fotografia.preset_eliminar', preset_id=0) }}".replace("/0/", "/__ID__/");
+</script>
+<script src="{{ url_for('static', filename='js/presets_biblioteca.js') }}"></script>
+{% endblock %}

@@ -66,6 +66,24 @@ def obtener_fotografias_proyecto(proyecto_id):
     )
 
 
+def obtener_fotografias_recientes_empresa(empresa_id, limite=30):
+    """Fotografias mas recientes de la empresa, sin importar el
+    proyecto -- Paso 11: sirve para elegir una "foto de muestra" al
+    previsualizar un preset desde la biblioteca (que no esta atada a
+    un proyecto en particular, los presets son de toda la empresa).
+    """
+    from app.extensions import db
+    from app.models import Fotografia
+
+    return (
+        db.session.query(Fotografia)
+        .filter_by(empresa_id=empresa_id, activo=True)
+        .order_by(Fotografia.creado_en.desc())
+        .limit(limite)
+        .all()
+    )
+
+
 def obtener_fotografia(empresa_id, fotografia_id):
     """Devuelve la fotografia solo si pertenece a la empresa indicada."""
     from app.extensions import db

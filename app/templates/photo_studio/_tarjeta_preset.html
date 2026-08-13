@@ -1,0 +1,22 @@
+{% set es_fav = preset.id in ids_favoritos %}
+<div class="ps-tarjeta-preset" data-preset-id="{{ preset.id }}">
+  <div class="ps-tarjeta-preset-cabecera">
+    <button type="button" class="ps-boton-favorito {% if es_fav %}activo{% endif %}" data-preset-id="{{ preset.id }}" title="{% if es_fav %}Quitar de favoritos{% else %}Marcar como favorito{% endif %}">
+      {% if es_fav %}★{% else %}☆{% endif %}
+    </button>
+    <strong class="ps-tarjeta-preset-nombre">{{ preset.nombre }}</strong>
+  </div>
+  {% if preset.categoria %}<span class="ps-pill-categoria">{{ preset.categoria|capitalize }}</span>{% endif %}
+  {% if preset.descripcion %}<p class="ps-tarjeta-preset-desc">{{ preset.descripcion }}</p>{% endif %}
+  <p class="ps-tarjeta-preset-meta">
+    {% if preset.es_sistema %}Preset del sistema{% else %}v{{ preset.version }} · personalizado{% endif %}
+  </p>
+  <div class="ps-tarjeta-preset-acciones">
+    <a href="{{ url_for('fotografia.preset_editar_formulario', preset_id=preset.id) }}" class="boton-secundario-oscuro">
+      {% if preset.es_sistema %}Ver / duplicar{% else %}Editar{% endif %}
+    </a>
+    {% if not preset.es_sistema %}
+    <button type="button" class="boton-peligro-oscuro ps-boton-eliminar-preset" data-preset-id="{{ preset.id }}" data-preset-nombre="{{ preset.nombre }}">Eliminar</button>
+    {% endif %}
+  </div>
+</div>

@@ -16,7 +16,7 @@ from app.models.fotografia_derivada import (
     MODOS_RECORTE,
     MODO_RECORTE_PREDETERMINADO,
 )
-from app.models.preset import Preset, SLUGS_PRESETS_SISTEMA
+from app.models.preset import Preset, PresetFavorito, SLUGS_PRESETS_SISTEMA
 from app.models.sesion_fotografica import (
     SesionFotografica,
     SesionItem,
@@ -45,6 +45,7 @@ __all__ = [
     "MODOS_RECORTE",
     "MODO_RECORTE_PREDETERMINADO",
     "Preset",
+    "PresetFavorito",
     "SLUGS_PRESETS_SISTEMA",
     "SesionFotografica",
     "SesionItem",

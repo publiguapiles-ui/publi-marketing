@@ -48,10 +48,11 @@
       <select id="sesion-campo-preset" name="preset_id">
         {% for preset in presets %}
         <option value="{{ preset.id }}" title="{{ preset.descripcion }}" {% if preset_automatico and preset.id == preset_automatico.id %}selected{% endif %}>
-          {{ preset.nombre }}
+          {{ preset.nombre }}{% if not preset.es_sistema %} (mi preset){% endif %}
         </option>
         {% endfor %}
       </select>
+      <a href="{{ url_for('fotografia.presets_biblioteca') }}" class="ps-enlace-discreto" target="_blank" rel="noopener">Gestionar presets →</a>
     </label>
 
     <label>

@@ -13,6 +13,8 @@ estar activa. Esto es intencional (ver Paso 4 y las pruebas de
 aislamiento de este paso).
 """
 
+import io
+
 from flask import Blueprint, Response, abort, jsonify, redirect, render_template, request, url_for
 
 from app.core.auth import obtener_usuario_actual
@@ -26,6 +28,7 @@ from app.services.fotografia import (
     eliminar_fotografia,
     obtener_fotografia,
     obtener_fotografias_proyecto,
+    obtener_fotografias_recientes_empresa,
     obtener_proyecto,
     obtener_proyectos_empresa,
 )
@@ -43,8 +46,25 @@ from app.services.storage import (
     url_firmada,
 )
 from app.services.derivados import crear_formato, crear_mejora_automatica, mejor_base_disponible, obtener_derivado, obtener_derivados_fotografia
-from app.services.procesamiento import cargar_imagen, detectar_rostros
-from app.services.presets import obtener_preset, obtener_preset_automatico, obtener_presets_disponibles
+from app.services.procesamiento import cargar_imagen, detectar_rostros, mejorar_fotografia
+from app.services.presets import (
+    CAMPOS_AVANZADOS,
+    CAMPOS_MOTOR,
+    CATEGORIAS_PRESET,
+    alternar_favorito,
+    crear_preset_personalizado,
+    duplicar_preset,
+    editar_preset_personalizado,
+    eliminar_preset_personalizado,
+    es_favorito,
+    normalizar_parametros,
+    obtener_ids_favoritos,
+    obtener_preset,
+    obtener_preset_automatico,
+    obtener_preset_propio,
+    obtener_presets_agrupados,
+    obtener_presets_disponibles,
+)
 from app.services.sesiones import (
     analizar_sesion,
     cancelar_sesion,
@@ -215,7 +235,18 @@ def foto_mejorar(fotografia_id):
     if not storage_configurado():
         return jsonify({"ok": False, "error": "El almacenamiento no está disponible en este momento."}), 503
 
-    derivado = crear_mejora_automatica(empresa.id, foto.proyecto_id, foto, usuario["id"])
+    # Paso 11: preset_id es opcional -- sin el, el comportamiento es
+    # identico al que tenia esta ruta antes de que existiera la
+    # biblioteca de presets (usa los objetivos por defecto del motor).
+    datos = request.get_json(silent=True) or {}
+    preset = None
+    preset_id = datos.get("preset_id")
+    if preset_id:
+        preset = obtener_preset(empresa.id, preset_id)
+        if preset is None:
+            return jsonify({"ok": False, "error": "El preset seleccionado no está disponible para esta empresa."}), 400
+
+    derivado = crear_mejora_automatica(empresa.id, foto.proyecto_id, foto, usuario["id"], preset=preset)
 
     if derivado.estado == "error":
         return jsonify({"ok": False, "error": derivado.error_mensaje or "No se pudo procesar la fotografía."}), 502
@@ -736,3 +767,226 @@ def foto_eliminar(fotografia_id):
         return redirect(url_for("fotografia.proyecto_detalle", proyecto_id=proyecto_id))
 
     return render_template("photo_studio/foto_eliminar.html", empresa_activa=empresa, foto=foto)
+
+
+# --- Biblioteca de presets (Paso 11) -----------------------------------------
+
+def _parametros_desde_formulario(datos):
+    """Extrae los campos de parametros de un dict tipo formulario/JSON
+    del editor de presets, en el shape que
+    app.services.presets.normalizar_parametros() espera. Nunca confia
+    en los valores (normalizar_parametros ya los clampa), esto solo
+    reordena las claves planas del formulario en la forma esperada.
+    """
+    parametros = {clave: datos.get(clave) for clave in CAMPOS_MOTOR}
+    parametros["avanzado"] = {clave: datos.get(f"avanzado_{clave}") for clave in CAMPOS_AVANZADOS}
+    return parametros
+
+
+@fotografia_bp.get("/presets")
+@login_required
+def presets_biblioteca():
+    empresa, _rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+    grupos = obtener_presets_agrupados(empresa.id)
+    fotos_muestra = obtener_fotografias_recientes_empresa(empresa.id, limite=30)
+    return render_template(
+        "photo_studio/presets_biblioteca.html",
+        empresa_activa=empresa,
+        grupos=grupos,
+        ids_favoritos=obtener_ids_favoritos(empresa.id),
+        fotos_muestra=fotos_muestra,
+        categorias=CATEGORIAS_PRESET,
+    )
+
+
+@fotografia_bp.get("/presets/nuevo")
+@login_required
+def preset_nuevo_formulario():
+    empresa, _rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+    fotos_muestra = obtener_fotografias_recientes_empresa(empresa.id, limite=30)
+    return render_template(
+        "photo_studio/preset_editor.html",
+        empresa_activa=empresa,
+        modo="crear",
+        preset=None,
+        solo_lectura=False,
+        categorias=CATEGORIAS_PRESET,
+        campos_motor=CAMPOS_MOTOR,
+        campos_avanzados=CAMPOS_AVANZADOS,
+        fotos_muestra=fotos_muestra,
+        fotos_muestra_urls=[(f, url_firmada(BUCKET_FOTOGRAFIAS, f.ruta_storage)) for f in fotos_muestra],
+    )
+
+
+@fotografia_bp.post("/presets/nuevo")
+@login_required
+def preset_nuevo():
+    empresa, _rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+    usuario = obtener_usuario_actual()
+
+    datos = request.get_json(silent=True) or {}
+    preset, error = crear_preset_personalizado(
+        empresa.id,
+        usuario["id"],
+        datos.get("nombre"),
+        datos.get("descripcion"),
+        datos.get("categoria"),
+        _parametros_desde_formulario(datos),
+    )
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    return jsonify(
+        {"ok": True, "preset_id": preset.id, "url": url_for("fotografia.preset_editar_formulario", preset_id=preset.id)}
+    ), 201
+
+
+@fotografia_bp.get("/presets/<int:preset_id>/editar")
+@login_required
+def preset_editar_formulario(preset_id):
+    empresa, _rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+    preset = obtener_preset(empresa.id, preset_id)
+    if preset is None:
+        abort(404)
+
+    fotos_muestra = obtener_fotografias_recientes_empresa(empresa.id, limite=30)
+    return render_template(
+        "photo_studio/preset_editor.html",
+        empresa_activa=empresa,
+        modo="editar",
+        preset=preset,
+        # Un preset de sistema (o de otra empresa, que obtener_preset ya
+        # filtra) se muestra pero no se puede guardar -- el editor
+        # ofrece "Duplicar" en su lugar (Paso 11, seccion EDITAR PRESET).
+        solo_lectura=preset.es_sistema,
+        categorias=CATEGORIAS_PRESET,
+        campos_motor=CAMPOS_MOTOR,
+        campos_avanzados=CAMPOS_AVANZADOS,
+        fotos_muestra=fotos_muestra,
+        fotos_muestra_urls=[(f, url_firmada(BUCKET_FOTOGRAFIAS, f.ruta_storage)) for f in fotos_muestra],
+    )
+
+
+@fotografia_bp.post("/presets/<int:preset_id>/editar")
+@login_required
+def preset_editar(preset_id):
+    empresa, _rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+
+    datos = request.get_json(silent=True) or {}
+    preset, error = editar_preset_personalizado(
+        empresa.id,
+        preset_id,
+        datos.get("nombre"),
+        datos.get("descripcion"),
+        datos.get("categoria"),
+        _parametros_desde_formulario(datos),
+    )
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    return jsonify({"ok": True, "preset_id": preset.id, "version": preset.version})
+
+
+@fotografia_bp.post("/presets/<int:preset_id>/duplicar")
+@login_required
+def preset_duplicar(preset_id):
+    empresa, _rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+    usuario = obtener_usuario_actual()
+
+    preset, error = duplicar_preset(empresa.id, usuario["id"], preset_id)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    return jsonify(
+        {"ok": True, "preset_id": preset.id, "url": url_for("fotografia.preset_editar_formulario", preset_id=preset.id)}
+    ), 201
+
+
+@fotografia_bp.post("/presets/<int:preset_id>/eliminar")
+@login_required
+def preset_eliminar(preset_id):
+    empresa, _rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+
+    ok, error = eliminar_preset_personalizado(empresa.id, preset_id)
+    if not ok:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True})
+
+
+@fotografia_bp.post("/presets/<int:preset_id>/favorito")
+@login_required
+def preset_favorito(preset_id):
+    empresa, _rol = obtener_empresa_activa()
+    if empresa is None:
+        abort(404)
+    preset = obtener_preset(empresa.id, preset_id)
+    if preset is None:
+        return jsonify({"ok": False, "error": "El preset no está disponible para esta empresa."}), 404
+
+    favorito = alternar_favorito(empresa.id, preset_id)
+    return jsonify({"ok": True, "favorito": favorito})
+
+
+@fotografia_bp.post("/fotos/<int:fotografia_id>/preset-vista-previa")
+@login_required
+def foto_preset_vista_previa(fotografia_id):
+    """Vista previa de un preset (Paso 11) usando el MISMO motor real de
+    procesamiento (app.services.procesamiento.mejorar_fotografia) sobre
+    una copia reducida del original -- nunca un filtro aparte solo para
+    la interfaz. El resultado nunca se guarda (ni en Storage ni en la
+    base de datos); aplicar de verdad el preset sigue siendo, como
+    siempre, crear un derivado nuevo desde el original completo.
+    """
+    empresa, _rol, foto = _fotografia_de_empresa_activa(fotografia_id)
+
+    if not storage_configurado():
+        abort(503)
+
+    datos = request.get_json(silent=True) or {}
+    parametros = datos.get("parametros")
+    if parametros is None:
+        preset_id = datos.get("preset_id")
+        if preset_id:
+            preset = obtener_preset(empresa.id, preset_id)
+            if preset is None:
+                return jsonify({"ok": False, "error": "El preset seleccionado no está disponible para esta empresa."}), 400
+            parametros = preset.parametros
+
+    # Nunca se confia en los numeros que manda el cliente (pueden venir
+    # incompletos o invalidos, ej. un slider deshabilitado que el
+    # formulario no incluyo): se normalizan igual que al crear/editar
+    # un preset, para que la vista previa nunca reciba None ni valores
+    # fuera de rango.
+    parametros = normalizar_parametros(parametros)
+
+    try:
+        bytes_originales = descargar_archivo(BUCKET_FOTOGRAFIAS, foto.ruta_storage)
+    except Exception:
+        return jsonify({"ok": False, "error": "No se pudo cargar la fotografía."}), 502
+
+    imagen = cargar_imagen(bytes_originales)
+    lado_mayor = max(imagen.size)
+    if lado_mayor > 900:
+        escala = 900 / lado_mayor
+        imagen = imagen.resize((max(1, round(imagen.width * escala)), max(1, round(imagen.height * escala))))
+
+    buffer = io.BytesIO()
+    imagen.save(buffer, format="JPEG", quality=90)
+    bytes_reducidos = buffer.getvalue()
+
+    bytes_resultado, _metadata = mejorar_fotografia(bytes_reducidos, preset=parametros)
+    return Response(bytes_resultado, mimetype="image/png")

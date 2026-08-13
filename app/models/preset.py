@@ -48,6 +48,18 @@ class Preset(db.Model):
     empresa_id = db.Column(db.Integer, db.ForeignKey("empresas.id"), nullable=True, index=True)
     es_sistema = db.Column(db.Boolean, default=False, nullable=False)
 
+    # Paso 11: agrupacion visual en la biblioteca (ver CATEGORIAS_PRESET
+    # en app/services/presets.py). None = sin categoria asignada.
+    categoria = db.Column(db.String(30), nullable=True, index=True)
+
+    # Paso 11: version del CONTENIDO de `parametros`. Se incrementa cada
+    # vez que se edita un preset personalizado (nunca en presets de
+    # sistema, que son de solo lectura). Un derivado guarda su propio
+    # snapshot (FotografiaDerivada.preset_version) tomado en el momento
+    # del procesamiento -- por eso un preset editado despues NUNCA
+    # cambia retroactivamente como se ve un derivado ya generado.
+    version = db.Column(db.Integer, nullable=False, default=1)
+
     parametros = db.Column(db.JSON, nullable=False, default=dict)
 
     activo = db.Column(db.Boolean, default=True, nullable=False)
@@ -65,3 +77,26 @@ class Preset(db.Model):
 
     def __repr__(self):
         return f"<Preset {self.slug} empresa={self.empresa_id}>"
+
+
+class PresetFavorito(db.Model):
+    """Marca "favorito" de un preset para una empresa (Paso 11).
+
+    No es una columna booleana en Preset porque un preset de sistema es
+    una unica fila compartida por TODAS las empresas -- si fuera una
+    columna ahi, marcar "Cálido" como favorito en una empresa lo
+    marcaria para todas. Con esta tabla intermedia, cada empresa tiene
+    su propia lista de favoritos sin importar si el preset es de
+    sistema o personalizado.
+    """
+
+    __tablename__ = "preset_favoritos"
+    __table_args__ = (db.UniqueConstraint("empresa_id", "preset_id", name="uq_preset_favorito_empresa_preset"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey("empresas.id"), nullable=False, index=True)
+    preset_id = db.Column(db.Integer, db.ForeignKey("presets.id"), nullable=False, index=True)
+    creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    empresa = db.relationship("Empresa")
+    preset = db.relationship("Preset")

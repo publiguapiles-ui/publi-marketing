@@ -106,6 +106,11 @@ def crear_mejora_automatica(empresa_id, proyecto_id, fotografia, usuario_id, pre
         estado="pendiente",
         sesion_id=sesion_id,
         preset_id=preset.id if preset else None,
+        # Paso 11: snapshot INMUTABLE tomado AHORA -- si el preset se
+        # edita o elimina despues, este derivado sigue mostrando el
+        # nombre/version que realmente se uso para generarlo.
+        preset_nombre=preset.nombre if preset else None,
+        preset_version=preset.version if preset else None,
         creado_por=usuario_id,
     )
     db.session.add(derivado)
