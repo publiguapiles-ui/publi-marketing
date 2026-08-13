@@ -714,3 +714,56 @@ def test_aislamiento_entre_empresas_no_afectado_por_longitud_de_nombre(client, u
     assert resp_b.status_code == 201
 
     assert resp_a.get_json()["preset_id"] != resp_b.get_json()["preset_id"]
+
+
+# =============================================================================
+# Paso 11.1 (segunda causa, misma clase de bug): un nombre de 61
+# caracteres (uno mas que Preset.nombre = db.String(60)) reproducia el
+# MISMO psycopg2.errors.StringDataRightTruncation, esta vez en la
+# columna `nombre` en vez de `slug`. Se descubrio en la verificacion
+# de produccion de la correccion del slug (PASO 8 del informe). Ahora
+# se valida explicitamente en vez de dejar que llegue a Postgres.
+# =============================================================================
+
+def test_crear_preset_con_nombre_de_61_caracteres_es_rechazado(client, usuario_a_con_empresa):
+    nombre_61 = "X" * 61
+    resp = client.post("/photo-studio/presets/nuevo", json={"nombre": nombre_61})
+    assert resp.status_code == 400
+    assert "60 caracteres" in resp.get_json()["error"]
+
+
+def test_crear_preset_con_nombre_de_exactamente_60_caracteres_funciona(client, usuario_a_con_empresa):
+    nombre_60 = "X" * 60
+    resp = client.post("/photo-studio/presets/nuevo", json={"nombre": nombre_60})
+    assert resp.status_code == 201
+
+
+def test_editar_preset_con_nombre_largo_es_rechazado(client, usuario_a_con_empresa):
+    preset_id = client.post("/photo-studio/presets/nuevo", json={"nombre": "Preset corto"}).get_json()["preset_id"]
+    resp = client.post(f"/photo-studio/presets/{preset_id}/editar", json={"nombre": "Y" * 61})
+    assert resp.status_code == 400
+    assert "60 caracteres" in resp.get_json()["error"]
+
+
+def test_crear_preset_con_descripcion_de_256_caracteres_es_rechazado(client, usuario_a_con_empresa):
+    resp = client.post("/photo-studio/presets/nuevo", json={"nombre": "Nombre normal", "descripcion": "Z" * 256})
+    assert resp.status_code == 400
+    assert "255 caracteres" in resp.get_json()["error"]
+
+
+def test_duplicar_preset_con_nombre_cercano_al_limite_no_falla(client, usuario_a_con_empresa):
+    """origen.nombre + ' — copia' podria superar 60 caracteres si el
+    original ya estaba cerca del limite -- duplicar_preset debe
+    recortar el nombre base para que el resultado siempre quepa."""
+    nombre_58 = "A" * 58  # 58 + " — copia" (8) = 66, supera 60 sin el recorte
+    preset_id = client.post("/photo-studio/presets/nuevo", json={"nombre": nombre_58}).get_json()["preset_id"]
+
+    resp = client.post(f"/photo-studio/presets/{preset_id}/duplicar")
+    assert resp.status_code == 201
+
+    from app.extensions import db
+
+    with client.application.app_context():
+        copia = db.session.get(Preset, resp.get_json()["preset_id"])
+        assert len(copia.nombre) <= 60
+        assert copia.nombre.endswith("— copia")

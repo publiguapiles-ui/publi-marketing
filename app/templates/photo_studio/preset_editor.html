@@ -31,11 +31,11 @@
     <form id="form-preset" class="ps-formulario-preset" {% if solo_lectura %}data-solo-lectura="1"{% endif %}>
       <label>
         Nombre
-        <input type="text" name="nombre" value="{{ preset.nombre if preset else '' }}" {% if solo_lectura %}disabled{% endif %} required />
+        <input type="text" name="nombre" maxlength="60" value="{{ preset.nombre if preset else '' }}" {% if solo_lectura %}disabled{% endif %} required />
       </label>
       <label>
         Descripción
-        <textarea name="descripcion" rows="2" {% if solo_lectura %}disabled{% endif %}>{{ preset.descripcion if preset else '' }}</textarea>
+        <textarea name="descripcion" rows="2" maxlength="255" {% if solo_lectura %}disabled{% endif %}>{{ preset.descripcion if preset else '' }}</textarea>
       </label>
       <label>
         Categoría

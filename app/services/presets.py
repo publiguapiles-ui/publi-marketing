@@ -377,6 +377,17 @@ def obtener_preset_automatico():
 # superaba -- SQLite nunca hizo cumplir ese limite, Postgres si).
 LONGITUD_MAXIMA_SLUG = 160
 
+# Paso 11.1: deben coincidir exactamente con Preset.nombre y
+# Preset.descripcion (db.String). Se descubrio la falta de esta
+# validacion durante la MISMA investigacion del bug del slug: un
+# nombre de 61 caracteres (uno mas que el limite de la columna)
+# provocaba el mismo psycopg2.errors.StringDataRightTruncation, solo
+# que en `nombre` en vez de en `slug`. Se valida explicitamente (en
+# vez de truncar en silencio) para que el usuario sepa que su texto no
+# se guardo tal cual lo escribio.
+LONGITUD_MAXIMA_NOMBRE = 60
+LONGITUD_MAXIMA_DESCRIPCION = 255
+
 
 def _generar_slug_personalizado(empresa_id, nombre):
     """Construye el slug de un preset personalizado garantizando que
@@ -404,6 +415,11 @@ def crear_preset_personalizado(empresa_id, usuario_id, nombre, descripcion, cate
     nombre = (nombre or "").strip()
     if not nombre:
         return None, "El nombre del preset es obligatorio."
+    if len(nombre) > LONGITUD_MAXIMA_NOMBRE:
+        return None, f"El nombre no puede superar los {LONGITUD_MAXIMA_NOMBRE} caracteres."
+    descripcion = (descripcion or "").strip() or None
+    if descripcion and len(descripcion) > LONGITUD_MAXIMA_DESCRIPCION:
+        return None, f"La descripción no puede superar los {LONGITUD_MAXIMA_DESCRIPCION} caracteres."
     if categoria and categoria not in CATEGORIAS_PRESET:
         return None, "Categoría inválida."
 
@@ -413,7 +429,7 @@ def crear_preset_personalizado(empresa_id, usuario_id, nombre, descripcion, cate
     preset = Preset(
         slug=slug,
         nombre=nombre,
-        descripcion=(descripcion or "").strip() or None,
+        descripcion=descripcion,
         categoria=categoria or "personalizado",
         empresa_id=empresa_id,
         es_sistema=False,
@@ -452,11 +468,16 @@ def editar_preset_personalizado(empresa_id, preset_id, nombre, descripcion, cate
     nombre = (nombre or "").strip()
     if not nombre:
         return None, "El nombre del preset es obligatorio."
+    if len(nombre) > LONGITUD_MAXIMA_NOMBRE:
+        return None, f"El nombre no puede superar los {LONGITUD_MAXIMA_NOMBRE} caracteres."
+    descripcion = (descripcion or "").strip() or None
+    if descripcion and len(descripcion) > LONGITUD_MAXIMA_DESCRIPCION:
+        return None, f"La descripción no puede superar los {LONGITUD_MAXIMA_DESCRIPCION} caracteres."
     if categoria and categoria not in CATEGORIAS_PRESET:
         return None, "Categoría inválida."
 
     preset.nombre = nombre
-    preset.descripcion = (descripcion or "").strip() or None
+    preset.descripcion = descripcion
     preset.categoria = categoria or "personalizado"
     preset.parametros = normalizar_parametros(parametros_entrada)
     preset.version += 1
@@ -475,7 +496,12 @@ def duplicar_preset(empresa_id, usuario_id, preset_id):
     if origen is None:
         return None, "El preset no está disponible para esta empresa."
 
-    nombre_nuevo = f"{origen.nombre} — copia"
+    sufijo = " — copia"
+    # Recorta el nombre base si hace falta para que "{nombre} — copia"
+    # siga cabiendo en LONGITUD_MAXIMA_NOMBRE incluso si el original ya
+    # estaba cerca del limite (ej. un nombre de 55+ caracteres).
+    nombre_base = origen.nombre[: LONGITUD_MAXIMA_NOMBRE - len(sufijo)]
+    nombre_nuevo = f"{nombre_base}{sufijo}"
     return crear_preset_personalizado(
         empresa_id, usuario_id, nombre_nuevo, origen.descripcion, origen.categoria, dict(origen.parametros or {})
     )
