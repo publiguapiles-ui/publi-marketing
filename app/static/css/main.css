@@ -1740,3 +1740,156 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Estratega IA (Paso 10): tres paneles -- conversaciones / chat / contexto. */
+
+.ia-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr 280px;
+  gap: 16px;
+  height: calc(100vh - 220px);
+  min-height: 480px;
+}
+
+.ia-panel {
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.ia-panel-chat {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ia-boton-nueva {
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.ia-lista-conversaciones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ia-item-conversacion {
+  text-align: left;
+  background: var(--color-bg);
+  border: 1px solid var(--color-borde);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.ia-item-conversacion:hover {
+  border-color: var(--color-acento);
+}
+
+.ia-item-conversacion-activa {
+  border-color: var(--color-acento);
+  background: #eef2ff;
+}
+
+.ia-mensajes {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ia-burbuja {
+  max-width: 80%;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ia-burbuja-usuario {
+  align-self: flex-end;
+  background: var(--color-acento);
+  color: #fff;
+}
+
+.ia-burbuja-asistente {
+  align-self: flex-start;
+  background: var(--color-bg);
+  border: 1px solid var(--color-borde);
+}
+
+.ia-burbuja-cargando {
+  font-style: italic;
+  color: #6b7280;
+}
+
+.ia-burbuja-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.ia-burbuja-usuario .ia-burbuja-meta {
+  color: #e5e7eb;
+}
+
+.ia-form-mensaje {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--color-borde);
+  padding: 12px;
+}
+
+.ia-form-mensaje textarea {
+  flex: 1;
+  border: 1px solid var(--color-borde);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+  resize: vertical;
+}
+
+.ia-boton-adjunto {
+  background: none;
+  border: 1px solid var(--color-borde);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ia-toggle-movil {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .ia-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .ia-toggle-movil {
+    display: inline-block;
+    margin: 0 8px 8px 0;
+  }
+  .ia-panel-conversaciones,
+  .ia-panel-contexto {
+    display: none;
+    max-height: 320px;
+  }
+  .ia-panel-conversaciones.ia-panel-visible,
+  .ia-panel-contexto.ia-panel-visible {
+    display: flex;
+  }
+  .ia-panel-chat {
+    height: 60vh;
+  }
+}

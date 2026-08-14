@@ -9,7 +9,10 @@
       — {{ datos.proyecto.objetivo }} · KPI principal: {{ datos.etiquetas_kpi.get(datos.proyecto.kpi_principal, datos.proyecto.kpi_principal) }}
     </p>
   </div>
-  <a href="{{ url_for('datos_meta.proyectos_estrategicos_lista') }}" class="boton-enlace">← Proyectos Estratégicos</a>
+  <div>
+    <a href="{{ url_for('estratega_ia.index', proyecto_id=datos.proyecto.id) }}" class="boton-primario">Preguntar al Estratega IA</a>
+    <a href="{{ url_for('datos_meta.proyectos_estrategicos_lista') }}" class="boton-enlace">← Proyectos Estratégicos</a>
+  </div>
 </div>
 
 <section id="pe-resumen">

@@ -6,7 +6,10 @@
     <h1>Datos de Meta</h1>
     <p class="perfil-nota">Inteligencia — diagnóstico, oportunidades y alertas calculados con reglas y datos verificables. Sin Claude ni ninguna IA generativa: cada conclusión muestra el dato real que la respalda.</p>
   </div>
-  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+  <div>
+    <a href="{{ url_for('estratega_ia.index', cuenta_id=cuenta_id, periodo=periodo_clave) }}" class="boton-primario">Preguntar al Estratega IA</a>
+    <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+  </div>
 </div>
 
 <form id="dm-filtros" class="formulario-simple dm-form-kpi" method="get">

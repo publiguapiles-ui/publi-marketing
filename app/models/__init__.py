@@ -46,6 +46,7 @@ from app.models.proyecto_estrategico import (
     ESTADOS_PROYECTO_ESTRATEGICO,
     TIPOS_AUDIENCIA_ESTRATEGICA,
 )
+from app.models.conversacion_ia import ConversacionIA, MensajeIA, ROLES_MENSAJE_IA
 
 __all__ = [
     "Usuario",
@@ -98,4 +99,7 @@ __all__ = [
     "PasoSecuenciaEstrategica",
     "ESTADOS_PROYECTO_ESTRATEGICO",
     "TIPOS_AUDIENCIA_ESTRATEGICA",
+    "ConversacionIA",
+    "MensajeIA",
+    "ROLES_MENSAJE_IA",
 ]

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block titulo %}Estratega IA · Marketing{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Marketing</h1>
+    <p class="perfil-nota">Estratega IA — analiza el contexto real de datos de Meta ya sincronizado para {{ empresa_activa.nombre }}. No crea, modifica ni publica nada en Meta; toda propuesta requiere tu confirmación.</p>
+  </div>
+</div>
+
+{% if not ia_configurada %}
+<div class="estado-vacio">
+  <p><strong>El asistente de IA no está configurado en este entorno.</strong></p>
+  <p class="perfil-nota">Falta la variable de entorno ANTHROPIC_API_KEY. La interfaz y el contexto automático funcionan igual — solo falta conectar el modelo.</p>
+</div>
+{% endif %}
+
+<div class="ia-layout" id="ia-layout">
+  <button type="button" class="boton-enlace ia-toggle-movil" id="ia-toggle-conversaciones">☰ Conversaciones</button>
+  <button type="button" class="boton-enlace ia-toggle-movil" id="ia-toggle-contexto">ⓘ Contexto</button>
+
+  <aside class="ia-panel ia-panel-conversaciones" id="ia-panel-conversaciones">
+    <button type="button" class="boton-primario ia-boton-nueva" id="ia-boton-nueva-conversacion">+ Nueva conversación</button>
+    <div id="ia-lista-conversaciones" class="ia-lista-conversaciones"></div>
+  </aside>
+
+  <section class="ia-panel ia-panel-chat">
+    <div id="ia-mensajes" class="ia-mensajes"></div>
+    <form id="ia-form-mensaje" class="ia-form-mensaje">
+      <button type="button" class="ia-boton-adjunto" id="ia-boton-microfono" disabled title="Próximamente">🎤</button>
+      <button type="button" class="ia-boton-adjunto" id="ia-boton-audio" disabled title="Próximamente">📎 Adjuntar audio</button>
+      <textarea id="ia-input-mensaje" placeholder="Pregúntale al Estratega IA… ej. ¿Cuál campaña está funcionando mejor?" rows="2" {% if not ia_configurada %}disabled{% endif %}></textarea>
+      <button type="submit" class="boton-primario" id="ia-boton-enviar" {% if not ia_configurada %}disabled{% endif %}>Enviar</button>
+    </form>
+    <p id="ia-mensaje-error" class="perfil-nota" hidden></p>
+  </section>
+
+  <aside class="ia-panel ia-panel-contexto" id="ia-panel-contexto">
+    <h2 class="ps-seccion-titulo">Contexto</h2>
+    <dl class="perfil-datos">
+      <dt>Empresa</dt>
+      <dd>{{ empresa_activa.nombre }}</dd>
+    </dl>
+    <label>
+      Proyecto estratégico (opcional)
+      <select id="ia-selector-proyecto">
+        <option value="">Ninguno — análisis general de la cuenta</option>
+        {% for p in proyectos %}
+        <option value="{{ p.id }}" {% if proyecto_inicial_id == p.id %}selected{% endif %}>{{ p.nombre }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Cuenta publicitaria
+      <select id="ia-selector-cuenta">
+        <option value="">Toda la empresa</option>
+        {% for cuenta in cuentas %}
+        <option value="{{ cuenta.id }}" {% if cuenta_inicial_id == cuenta.id %}selected{% endif %}>{{ cuenta.nombre or cuenta.id_externo }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Período
+      <select id="ia-selector-periodo">
+        {% for p in periodos %}
+        {% if p != "personalizado" %}
+        <option value="{{ p }}" {% if p == periodo_inicial %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+    </label>
+
+    <h3 class="ps-seccion-titulo">Datos utilizados</h3>
+    <div id="ia-datos-utilizados" class="perfil-nota">Cargando…</div>
+  </aside>
+</div>
+
+<script>
+  window.DM_IA_CONFIGURADA = {{ ia_configurada | tojson }};
+  window.DM_IA_CONVERSACIONES_INICIALES = {{ conversaciones | tojson }};
+  window.DM_IA_CONVERSACION_INICIAL_ID = {{ conversacion_inicial_id | tojson }};
+  window.DM_IA_PROYECTO_INICIAL_ID = {{ proyecto_inicial_id | tojson }};
+  window.DM_IA_LIMITE_MENSAJES_CONVERSACION = {{ limite_mensajes_conversacion }};
+  window.DM_IA_LIMITE_MENSAJES_DIARIOS = {{ limite_mensajes_diarios }};
+  window.DM_IA_URLS = {
+    conversaciones: "{{ url_for('estratega_ia.conversaciones_lista') }}",
+    conversacionesCrear: "{{ url_for('estratega_ia.conversaciones_crear') }}",
+    conversacionDetalleBase: "{{ url_for('estratega_ia.conversaciones_detalle', conversacion_id=0) }}".replace("/0", "/__ID__"),
+    mensajeEnviarBase: "{{ url_for('estratega_ia.conversaciones_enviar_mensaje', conversacion_id=0) }}".replace("/0/", "/__ID__/"),
+    contexto: "{{ url_for('estratega_ia.contexto') }}"
+  };
+</script>
+<script src="{{ url_for('static', filename='js/estratega_ia.js') }}"></script>
+{% endblock %}

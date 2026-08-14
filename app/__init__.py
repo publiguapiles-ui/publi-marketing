@@ -106,7 +106,7 @@ def registrar_blueprints(app):
     from app.modules.contenido.routes import contenido_bp
     from app.modules.fotografia.routes import fotografia_bp
     from app.modules.diseno.routes import diseno_bp
-    from app.modules.ia.routes import ia_bp
+    from app.modules.estratega_ia.routes import estratega_ia_bp
     from app.modules.calendario.routes import calendario_bp
     from app.modules.redes_sociales.routes import redes_sociales_bp
     from app.modules.datos_meta.routes import datos_meta_bp
@@ -121,7 +121,7 @@ def registrar_blueprints(app):
     app.register_blueprint(contenido_bp)
     app.register_blueprint(fotografia_bp)
     app.register_blueprint(diseno_bp)
-    app.register_blueprint(ia_bp)
+    app.register_blueprint(estratega_ia_bp)
     app.register_blueprint(calendario_bp)
     app.register_blueprint(redes_sociales_bp)
     # Campañas, Analítica e Informes (antes stubs "Próximamente"
