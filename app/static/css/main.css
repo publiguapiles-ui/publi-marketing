@@ -1471,6 +1471,10 @@ body {
   cursor: pointer;
 }
 
+.dm-campo-periodo[hidden] {
+  display: none;
+}
+
 .dm-campo-periodo {
   display: flex;
   flex-wrap: wrap;

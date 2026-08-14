@@ -68,53 +68,76 @@ def _tabla(cabeceras, filas, anchos=None):
 # --- Gráficos vectoriales (reportlab.graphics, no una imagen) --------------------------
 
 def _grafico_barras(titulo, etiquetas, valores, color="#2563eb"):
-    from reportlab.graphics.charts.barcharts import VerticalBarChart
-    from reportlab.graphics.shapes import Drawing, String
+    """Dibuja las barras a mano con formas primitivas
+    (reportlab.graphics.shapes: Drawing/Rect/String) -- deliberadamente
+    NO usa reportlab.graphics.charts.barcharts (VerticalBarChart), cuyo
+    subsistema de ejes/leyendas trae mucho mas codigo del que esta
+    pantalla necesita y se observo inestable bajo el contenedor de
+    produccion. La misma matematica ya usada en las versiones SVG del
+    navegador (ver datos_meta_informes.js), aqui en coordenadas PDF."""
+    from reportlab.graphics.shapes import Drawing, Rect, String
 
-    valores_validos = [v if v is not None else 0 for v in valores]
-    if not any(valores_validos):
+    valores_validos = [v for v in valores if v is not None]
+    if not valores_validos or max(valores_validos) <= 0:
         return None
 
     ancho, alto = 480, 190
+    margen_izq, margen_inf, margen_sup = 10, 34, 20
+    alto_barras = alto - margen_inf - margen_sup
+    ancho_barras = ancho - margen_izq * 2
+
     dibujo = Drawing(ancho, alto)
     dibujo.add(String(0, alto - 12, titulo, fontSize=10, fillColor=colors.HexColor("#1f2937")))
 
-    grafico = VerticalBarChart()
-    grafico.x, grafico.y = 40, 20
-    grafico.width, grafico.height = ancho - 60, alto - 50
-    grafico.data = [valores_validos]
-    grafico.bars[0].fillColor = colors.HexColor(color)
-    grafico.categoryAxis.categoryNames = [e[:14] for e in etiquetas]
-    grafico.categoryAxis.labels.angle = 30
-    grafico.categoryAxis.labels.dx = -8
-    grafico.categoryAxis.labels.fontSize = 7
-    grafico.valueAxis.valueMin = 0
-    dibujo.add(grafico)
+    n = len(valores)
+    paso = ancho_barras / n if n else 0
+    ancho_barra = max(paso * 0.6, 2)
+    maximo = max(valores_validos)
+    color_rl = colors.HexColor(color)
+
+    for i, v in enumerate(valores):
+        if v is None:
+            continue
+        alto_barra = (v / maximo) * alto_barras if maximo else 0
+        x = margen_izq + i * paso + (paso - ancho_barra) / 2
+        dibujo.add(Rect(x, margen_inf, ancho_barra, max(alto_barra, 1), fillColor=color_rl, strokeColor=None))
+        if n <= 12:
+            etiqueta = (etiquetas[i] or "")[:10]
+            dibujo.add(String(x, margen_inf - 10, etiqueta, fontSize=6.5, fillColor=colors.HexColor("#6b7280")))
+
     return dibujo
 
 
 def _grafico_lineas(titulo, etiquetas, valores, color="#ea580c"):
-    from reportlab.graphics.charts.lineplots import LinePlot
-    from reportlab.graphics.shapes import Drawing, String
+    """Misma logica que _grafico_barras: PolyLine a mano, sin el
+    subsistema reportlab.graphics.charts.lineplots."""
+    from reportlab.graphics.shapes import Drawing, PolyLine, String
 
     puntos = [(i, v) for i, v in enumerate(valores) if v is not None]
     if len(puntos) < 2:
         return None
 
     ancho, alto = 480, 190
+    margen_izq, margen_inf, margen_sup = 10, 20, 20
+    alto_disponible = alto - margen_inf - margen_sup
+    ancho_disponible = ancho - margen_izq * 2
+
     dibujo = Drawing(ancho, alto)
     dibujo.add(String(0, alto - 12, titulo, fontSize=10, fillColor=colors.HexColor("#1f2937")))
 
-    grafico = LinePlot()
-    grafico.x, grafico.y = 40, 20
-    grafico.width, grafico.height = ancho - 60, alto - 50
-    grafico.data = [puntos]
-    grafico.lines[0].strokeColor = colors.HexColor(color)
-    grafico.lines[0].strokeWidth = 2
-    grafico.xValueAxis.valueMin = 0
-    grafico.xValueAxis.valueMax = max(1, len(valores) - 1)
-    grafico.xValueAxis.labels.fontSize = 0  # fechas diarias: eje sin etiquetas para no saturar
-    dibujo.add(grafico)
+    n = len(valores)
+    paso = ancho_disponible / (n - 1) if n > 1 else 0
+    valores_puntos = [v for _i, v in puntos]
+    minimo, maximo = min(valores_puntos), max(valores_puntos)
+    rango = (maximo - minimo) or 1
+
+    coordenadas = []
+    for i, v in puntos:
+        x = margen_izq + i * paso
+        y = margen_inf + ((v - minimo) / rango) * alto_disponible
+        coordenadas.extend([x, y])
+
+    dibujo.add(PolyLine(coordenadas, strokeColor=colors.HexColor(color), strokeWidth=2))
     return dibujo
 
 
