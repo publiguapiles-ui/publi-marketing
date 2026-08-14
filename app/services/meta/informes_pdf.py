@@ -1,9 +1,14 @@
 """Generación de PDF estructurado para los informes de pauta (Paso 15,
 punto 16).
 
-Usa reportlab (Platypus: párrafos, tablas y gráficos vectoriales reales
-via reportlab.graphics) -- nunca una captura de pantalla del HTML. Lee
-EXCLUSIVAMENTE el `contenido` ya calculado y persistido en
+Usa reportlab (Platypus: párrafos, tablas y "gráficos" de barras
+horizontales dibujados con Table/celdas de color) -- nunca una captura
+de pantalla del HTML. Deliberadamente NUNCA usa reportlab.graphics
+(Drawing/Rect/PolyLine ni los charts de alto nivel como
+VerticalBarChart/LinePlot): se observó que su importación perezosa
+causaba caídas intermitentes (503) del proceso en el contenedor de
+producción -- ver _grafico_barras()/_grafico_lineas() para el detalle.
+Lee EXCLUSIVAMENTE el `contenido` ya calculado y persistido en
 InformePauta (ver informes.py) -- este archivo no vuelve a calcular
 ningún KPI ni a consultar la base de datos, solo da formato.
 
@@ -65,80 +70,54 @@ def _tabla(cabeceras, filas, anchos=None):
     return tabla
 
 
-# --- Gráficos vectoriales (reportlab.graphics, no una imagen) --------------------------
+# --- Gráficos vectoriales (SOLO reportlab.platypus.Table, nunca reportlab.graphics) -----
+#
+# Barras horizontales dibujadas como celdas de tabla con ancho
+# proporcional al valor y fondo de color -- sigue siendo un grafico
+# vectorial estructurado (nunca una imagen/captura), pero usa
+# EXCLUSIVAMENTE Table/Paragraph, que ya son estables en produccion
+# (las tablas de KPI/campañas de este mismo archivo las usan sin
+# problema). reportlab.graphics (Drawing/Rect/PolyLine/los charts de
+# alto nivel) se evita deliberadamente en todo este archivo: se
+# observo que su importacion perezosa causaba caidas intermitentes
+# del proceso en el contenedor de produccion (memoria/tiempo de carga
+# de metricas de fuentes) -- un riesgo que no vale la pena para un
+# grafico de barras simple.
 
-def _grafico_barras(titulo, etiquetas, valores, color="#2563eb"):
-    """Dibuja las barras a mano con formas primitivas
-    (reportlab.graphics.shapes: Drawing/Rect/String) -- deliberadamente
-    NO usa reportlab.graphics.charts.barcharts (VerticalBarChart), cuyo
-    subsistema de ejes/leyendas trae mucho mas codigo del que esta
-    pantalla necesita y se observo inestable bajo el contenedor de
-    produccion. La misma matematica ya usada en las versiones SVG del
-    navegador (ver datos_meta_informes.js), aqui en coordenadas PDF."""
-    from reportlab.graphics.shapes import Drawing, Rect, String
+_ANCHO_BARRA_MAXIMO = 8 * cm
 
-    valores_validos = [v for v in valores if v is not None]
-    if not valores_validos or max(valores_validos) <= 0:
+
+def _grafico_barras(titulo, etiquetas, valores, color="#2563eb", max_filas=12):
+    pares = [(e, v) for e, v in zip(etiquetas, valores) if v is not None]
+    if not pares:
         return None
+    pares = pares[:max_filas]
+    maximo = max(v for _e, v in pares) or 1
 
-    ancho, alto = 480, 190
-    margen_izq, margen_inf, margen_sup = 10, 34, 20
-    alto_barras = alto - margen_inf - margen_sup
-    ancho_barras = ancho - margen_izq * 2
+    filas = []
+    for etiqueta, valor in pares:
+        ancho_barra = max((valor / maximo) * _ANCHO_BARRA_MAXIMO, 0.15 * cm)
+        barra = Table([[""]], colWidths=[ancho_barra], rowHeights=[0.4 * cm])
+        barra.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(color))]))
+        filas.append([_p((etiqueta or "")[:26], _ESTILO_NOTA), barra, _p(_formatear_valor(round(valor, 2)), _ESTILO_NOTA)])
 
-    dibujo = Drawing(ancho, alto)
-    dibujo.add(String(0, alto - 12, titulo, fontSize=10, fillColor=colors.HexColor("#1f2937")))
-
-    n = len(valores)
-    paso = ancho_barras / n if n else 0
-    ancho_barra = max(paso * 0.6, 2)
-    maximo = max(valores_validos)
-    color_rl = colors.HexColor(color)
-
-    for i, v in enumerate(valores):
-        if v is None:
-            continue
-        alto_barra = (v / maximo) * alto_barras if maximo else 0
-        x = margen_izq + i * paso + (paso - ancho_barra) / 2
-        dibujo.add(Rect(x, margen_inf, ancho_barra, max(alto_barra, 1), fillColor=color_rl, strokeColor=None))
-        if n <= 12:
-            etiqueta = (etiquetas[i] or "")[:10]
-            dibujo.add(String(x, margen_inf - 10, etiqueta, fontSize=6.5, fillColor=colors.HexColor("#6b7280")))
-
-    return dibujo
+    tabla = Table(filas, colWidths=[4 * cm, _ANCHO_BARRA_MAXIMO + 0.3 * cm, 2.5 * cm])
+    tabla.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
+    return [_p(titulo, _ESTILO_SUBSECCION), tabla]
 
 
-def _grafico_lineas(titulo, etiquetas, valores, color="#ea580c"):
-    """Misma logica que _grafico_barras: PolyLine a mano, sin el
-    subsistema reportlab.graphics.charts.lineplots."""
-    from reportlab.graphics.shapes import Drawing, PolyLine, String
-
-    puntos = [(i, v) for i, v in enumerate(valores) if v is not None]
-    if len(puntos) < 2:
+def _grafico_lineas(titulo, etiquetas, valores, color="#ea580c", max_filas=15):
+    """Misma tecnica de barras horizontales que _grafico_barras --
+    para una serie diaria larga, muestra como maximo `max_filas` puntos
+    espaciados uniformemente (nunca todos los dias a la vez, para que
+    la tabla siga siendo legible)."""
+    pares = [(e, v) for e, v in zip(etiquetas, valores) if v is not None]
+    if len(pares) < 2:
         return None
-
-    ancho, alto = 480, 190
-    margen_izq, margen_inf, margen_sup = 10, 20, 20
-    alto_disponible = alto - margen_inf - margen_sup
-    ancho_disponible = ancho - margen_izq * 2
-
-    dibujo = Drawing(ancho, alto)
-    dibujo.add(String(0, alto - 12, titulo, fontSize=10, fillColor=colors.HexColor("#1f2937")))
-
-    n = len(valores)
-    paso = ancho_disponible / (n - 1) if n > 1 else 0
-    valores_puntos = [v for _i, v in puntos]
-    minimo, maximo = min(valores_puntos), max(valores_puntos)
-    rango = (maximo - minimo) or 1
-
-    coordenadas = []
-    for i, v in puntos:
-        x = margen_izq + i * paso
-        y = margen_inf + ((v - minimo) / rango) * alto_disponible
-        coordenadas.extend([x, y])
-
-    dibujo.add(PolyLine(coordenadas, strokeColor=colors.HexColor(color), strokeWidth=2))
-    return dibujo
+    if len(pares) > max_filas:
+        paso = len(pares) / max_filas
+        pares = [pares[int(i * paso)] for i in range(max_filas)]
+    return _grafico_barras(titulo, [p[0] for p in pares], [p[1] for p in pares], color=color, max_filas=max_filas)
 
 
 # --- Secciones ----------------------------------------------------------------------
@@ -286,7 +265,7 @@ def _seccion_graficos(contenido):
     if campanas:
         grafico = _grafico_barras("Inversión por campaña", [c["nombre"] for c in campanas], [c["kpis"].get("spend") for c in campanas])
         if grafico:
-            bloques.append(grafico)
+            bloques.extend(grafico)
             bloques.append(Spacer(1, 10))
             hubo_grafico = True
 
@@ -294,7 +273,7 @@ def _seccion_graficos(contenido):
     if serie:
         grafico = _grafico_lineas("Evolución del costo por resultado", [d["fecha"] for d in serie], [d.get("costo_por_resultado") for d in serie])
         if grafico:
-            bloques.append(grafico)
+            bloques.extend(grafico)
             hubo_grafico = True
 
     if not hubo_grafico:

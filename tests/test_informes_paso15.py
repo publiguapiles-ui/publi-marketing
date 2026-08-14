@@ -287,6 +287,23 @@ def test_informe_sin_datos_indica_limitacion_honesta(client, usuario_a_con_empre
     assert "período contiene pocos resultados" in texto or "DATOS INSUFICIENTES" in texto.upper()
 
 
+def test_descargar_pdf_de_informe_sin_ninguna_campana_no_falla(client, usuario_a_con_empresa):
+    """Reproduce exactamente el escenario de produccion (cuenta
+    vinculada, cero campañas sincronizadas todavia) -- el PDF debe
+    generarse igual, mostrando honestamente que no hay datos, nunca
+    lanzar una excepcion por listas/series completamente vacias."""
+    with client.application.app_context():
+        cuenta_id = _crear_cuenta(usuario_a_con_empresa["empresa_id"]).id
+
+    resp_crear = client.post("/datos-meta/informes/crear", json=_cuerpo_crear(cuenta_id, tipo="ejecutivo", periodo="ultimos_30_dias", fecha_inicio=None, fecha_fin=None))
+    assert resp_crear.status_code == 201
+    informe_id = resp_crear.get_json()["informe_id"]
+
+    resp = client.get(f"/datos-meta/informes/{informe_id}/descargar")
+    assert resp.status_code == 200
+    assert resp.data[:5] == b"%PDF-"
+
+
 # --- Versiones: nunca sobrescribe -----------------------------------------------------------
 
 def test_regenerar_el_mismo_informe_crea_una_nueva_version(client, usuario_a_con_empresa):
