@@ -47,6 +47,7 @@ from app.models.proyecto_estrategico import (
     TIPOS_AUDIENCIA_ESTRATEGICA,
 )
 from app.models.conversacion_ia import ConversacionIA, MensajeIA, ROLES_MENSAJE_IA
+from app.models.accion_meta import AccionMeta, ESTADOS_ACCION_META, TIPOS_ACCION_META, ORIGENES_ACCION_META
 
 __all__ = [
     "Usuario",
@@ -102,4 +103,8 @@ __all__ = [
     "ConversacionIA",
     "MensajeIA",
     "ROLES_MENSAJE_IA",
+    "AccionMeta",
+    "ESTADOS_ACCION_META",
+    "TIPOS_ACCION_META",
+    "ORIGENES_ACCION_META",
 ]

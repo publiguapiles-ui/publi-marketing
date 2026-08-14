@@ -315,6 +315,16 @@ body {
 .estado-badge-expirada,
 .estado-badge-revocada { background: #f3f4f6; color: #6b7280; }
 
+/* Acciones controladas sobre Meta (Paso 12) */
+.acc-estado-borrador { background: #f3f4f6; color: #6b7280; }
+.acc-estado-pendiente_de_aprobacion { background: #dbeafe; color: #1e40af; }
+.acc-estado-aprobada { background: #cffafe; color: #155e75; }
+.acc-estado-ejecutando { background: #fef3c7; color: #92400e; }
+.acc-estado-ejecutada { background: #dcfce7; color: #166534; }
+.acc-estado-error { background: #fee2e2; color: #991b1b; }
+.acc-estado-rechazada { background: #f3f4f6; color: #6b7280; }
+.acc-estado-cancelada { background: #f3f4f6; color: #6b7280; }
+
 /* Diagnostico de cuenta (Paso 8): BUENO/ATENCION/CRITICO/SIN_DATOS */
 .estado-badge-bueno { background: #dcfce7; color: #166534; }
 .estado-badge-atencion { background: #fef3c7; color: #92400e; }

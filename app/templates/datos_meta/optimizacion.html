@@ -69,7 +69,7 @@
 <table class="dm-tabla-kpi" id="opt-tabla-comparacion">
   <thead>
     <tr>
-      <th></th><th>Nombre</th><th>Gasto</th><th>Resultados</th><th>Costo por resultado</th><th>CTR</th><th>Veredicto</th><th>Vs. período anterior</th><th></th>
+      <th></th><th>Nombre</th><th>Gasto</th><th>Resultados</th><th>Costo por resultado</th><th>CTR</th><th>Veredicto</th><th>Vs. período anterior</th><th></th><th>Acciones</th>
     </tr>
   </thead>
   <tbody>
@@ -93,6 +93,16 @@
       <td>
         {% if datos.nivel == "cuenta" %}
         <a href="{{ url_for('datos_meta.campana_detalle', campana_id=fila.id) }}" class="boton-enlace">Ver detalles</a>
+        {% endif %}
+      </td>
+      <td>
+        {% if fila.estado in ("ACTIVE",) %}
+        <a href="{{ url_for('datos_meta.acciones_lista', entidad_id=fila.id, tipo_accion='pausar') }}" class="boton-enlace">Proponer pausar</a>
+        {% else %}
+        <a href="{{ url_for('datos_meta.acciones_lista', entidad_id=fila.id, tipo_accion='activar') }}" class="boton-enlace">Proponer activar</a>
+        {% endif %}
+        {% if datos.nivel in ("cuenta", "campana") %}
+        <a href="{{ url_for('datos_meta.acciones_lista', entidad_id=fila.id, tipo_accion='modificar_presupuesto') }}" class="boton-enlace">Proponer presupuesto</a>
         {% endif %}
       </td>
     </tr>

@@ -67,6 +67,16 @@ from app.services.meta.planificador import (
 )
 from app.services.meta.inteligencia import construir_inteligencia
 from app.services.meta.optimizacion import construir_centro_optimizacion
+from app.services.meta.acciones import (
+    aprobar_propuesta,
+    cancelar_propuesta,
+    crear_propuesta,
+    ejecutar_accion,
+    listar_acciones_empresa,
+    obtener_accion,
+    preparar_reversion,
+    rechazar_propuesta,
+)
 from app.services.meta.proyectos_estrategicos import (
     agregar_fase,
     agregar_paso_secuencia,
@@ -88,7 +98,13 @@ from app.services.presupuestos import (
     eliminar_presupuesto,
     obtener_presupuestos_empresa,
 )
-from app.models import ESTADOS_PROYECTO_PAUTA, ESTADOS_PROYECTO_ESTRATEGICO, TIPOS_AUDIENCIA_ESTRATEGICA
+from app.models import (
+    ESTADOS_PROYECTO_PAUTA,
+    ESTADOS_PROYECTO_ESTRATEGICO,
+    TIPOS_AUDIENCIA_ESTRATEGICA,
+    ESTADOS_ACCION_META,
+    TIPOS_ACCION_META,
+)
 
 datos_meta_bp = Blueprint("datos_meta", __name__, url_prefix="/datos-meta")
 
@@ -1475,3 +1491,253 @@ def optimizacion_conjuntos():
 
     conjuntos = listar_conjuntos_de_campana(empresa.id, campana_id)
     return jsonify({"ok": True, "conjuntos": [{"id": c.id, "nombre": c.nombre or c.id_externo} for c in conjuntos]})
+
+
+# --- Centro de acciones controladas sobre Meta (Paso 12) ----------------------------
+#
+# Reutiliza exclusivamente app/services/meta/acciones.py, que a su vez
+# reutiliza MetaClient (client.py) y obtener_cliente_para_empresa
+# (conexiones.py) -- ninguna llamada a la Graph API ocurre en este
+# archivo. NUNCA ejecuta una accion sin que el estado ya sea "aprobada"
+# y llegue confirmacion=True explicito desde el formulario de doble
+# confirmacion.
+
+def _jerarquia_entidad(entidad):
+    from app.extensions import db
+    from app.models import EntidadPublicitaria
+
+    niveles = {}
+    actual = entidad
+    visitados = 0
+    while actual is not None and visitados < 6:  # limite defensivo, la jerarquia real nunca es tan profunda
+        niveles[actual.tipo] = actual.nombre or actual.id_externo
+        actual = db.session.get(EntidadPublicitaria, actual.entidad_padre_id) if actual.entidad_padre_id else None
+        visitados += 1
+    return niveles
+
+
+def _serializar_accion(accion):
+    jerarquia = _jerarquia_entidad(accion.entidad)
+    return {
+        "id": accion.id,
+        "tipo_accion": accion.tipo_accion,
+        "entidad_id": accion.entidad_id,
+        "entidad_nombre": accion.entidad.nombre or accion.entidad.id_externo,
+        "entidad_tipo": accion.entidad.tipo,
+        "cuenta_publicitaria": jerarquia.get("cuenta_publicitaria"),
+        "campana": jerarquia.get("campana"),
+        "conjunto": jerarquia.get("conjunto_anuncios"),
+        "anuncio": jerarquia.get("anuncio"),
+        "valor_actual": accion.valor_actual,
+        "valor_propuesto": accion.valor_propuesto,
+        "motivo": accion.motivo,
+        "evidencia": accion.evidencia,
+        "riesgo": accion.riesgo,
+        "origen": accion.origen,
+        "estado": accion.estado,
+        "propuesto_por": accion.propuesto_por,
+        "aprobado_por": accion.aprobado_por,
+        "aprobado_en": accion.aprobado_en.isoformat() if accion.aprobado_en else None,
+        "ejecutado_en": accion.ejecutado_en.isoformat() if accion.ejecutado_en else None,
+        "resultado_meta": accion.resultado_meta,
+        "error_mensaje": accion.error_mensaje,
+        "creado_en": accion.creado_en.isoformat(),
+    }
+
+
+@datos_meta_bp.get("/acciones")
+@login_required
+def acciones_lista():
+    empresa, _rol = _empresa_activa_o_404()
+    estado_filtro = request.args.get("estado") or None
+    if estado_filtro not in (None, *ESTADOS_ACCION_META):
+        estado_filtro = None
+
+    acciones = listar_acciones_empresa(empresa.id, estado=estado_filtro)
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+
+    # Prellenado (Paso 11 -> Paso 12): un enlace "Preparar accion" desde
+    # Optimizacion o desde el Estratega IA puede traer una entidad ya
+    # elegida -- se resuelve aqui, SIEMPRE revalidando que pertenece a
+    # esta empresa (nunca se confia en el id tal cual llega del navegador).
+    entidad_prefill = None
+    entidad_id_param = request.args.get("entidad_id", type=int)
+    if entidad_id_param is not None:
+        from app.extensions import db
+        from app.models import EntidadPublicitaria
+
+        entidad_prefill = (
+            db.session.query(EntidadPublicitaria).filter_by(id=entidad_id_param, empresa_id=empresa.id).first()
+        )
+
+    tipo_accion_prefill = request.args.get("tipo_accion")
+    if tipo_accion_prefill not in TIPOS_ACCION_META:
+        tipo_accion_prefill = None
+
+    return render_template(
+        "datos_meta/acciones_lista.html",
+        empresa_activa=empresa,
+        acciones=[_serializar_accion(a) for a in acciones],
+        cuentas=cuentas,
+        estados=ESTADOS_ACCION_META,
+        tipos_accion=TIPOS_ACCION_META,
+        estado_filtro=estado_filtro,
+        entidad_prefill=entidad_prefill,
+        tipo_accion_prefill=tipo_accion_prefill,
+        motivo_prefill=request.args.get("motivo") or "",
+    )
+
+
+@datos_meta_bp.get("/acciones/campanas")
+@login_required
+def acciones_campanas():
+    empresa, _rol = _empresa_activa_o_404()
+    cuenta_id = request.args.get("cuenta_id", type=int)
+    if cuenta_id is None:
+        return jsonify({"ok": False, "error": "Falta cuenta_id."}), 400
+    campanas = listar_campanas_de_cuenta(empresa.id, cuenta_id)
+    return jsonify({"ok": True, "campanas": [{"id": c.id, "nombre": c.nombre or c.id_externo} for c in campanas]})
+
+
+@datos_meta_bp.get("/acciones/conjuntos")
+@login_required
+def acciones_conjuntos():
+    empresa, _rol = _empresa_activa_o_404()
+    campana_id = request.args.get("campana_id", type=int)
+    if campana_id is None:
+        return jsonify({"ok": False, "error": "Falta campana_id."}), 400
+    from app.services.meta.cuentas_service import listar_conjuntos_de_campana
+
+    conjuntos = listar_conjuntos_de_campana(empresa.id, campana_id)
+    return jsonify({"ok": True, "conjuntos": [{"id": c.id, "nombre": c.nombre or c.id_externo} for c in conjuntos]})
+
+
+@datos_meta_bp.get("/acciones/anuncios")
+@login_required
+def acciones_anuncios():
+    empresa, _rol = _empresa_activa_o_404()
+    conjunto_id = request.args.get("conjunto_id", type=int)
+    if conjunto_id is None:
+        return jsonify({"ok": False, "error": "Falta conjunto_id."}), 400
+    from app.services.meta.cuentas_service import listar_anuncios_de_conjuntos
+
+    anuncios = listar_anuncios_de_conjuntos(empresa.id, [conjunto_id])
+    return jsonify({"ok": True, "anuncios": [{"id": a.id, "nombre": a.nombre or a.id_externo} for a in anuncios]})
+
+
+@datos_meta_bp.post("/acciones/crear")
+@login_required
+def acciones_crear():
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+    datos = request.get_json(silent=True) or {}
+
+    accion, error = crear_propuesta(
+        empresa.id, usuario["id"],
+        entidad_id=datos.get("entidad_id"),
+        tipo_accion=datos.get("tipo_accion"),
+        valor_propuesto=datos.get("valor_propuesto"),
+        motivo=datos.get("motivo"),
+        evidencia=datos.get("evidencia"),
+        riesgo=datos.get("riesgo"),
+        origen=datos.get("origen") or "manual",
+    )
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "accion_id": accion.id}), 201
+
+
+@datos_meta_bp.get("/acciones/<int:accion_id>")
+@login_required
+def acciones_detalle(accion_id):
+    empresa, _rol = _empresa_activa_o_404()
+    accion = obtener_accion(empresa.id, accion_id)
+    if accion is None:
+        abort(404)
+
+    return render_template(
+        "datos_meta/acciones_detalle.html",
+        empresa_activa=empresa,
+        accion=_serializar_accion(accion),
+    )
+
+
+@datos_meta_bp.post("/acciones/<int:accion_id>/aprobar")
+@login_required
+def acciones_aprobar(accion_id):
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+    accion, error = aprobar_propuesta(empresa.id, usuario["id"], accion_id)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "estado": accion.estado})
+
+
+@datos_meta_bp.post("/acciones/<int:accion_id>/rechazar")
+@login_required
+def acciones_rechazar(accion_id):
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+    datos = request.get_json(silent=True) or {}
+    accion, error = rechazar_propuesta(empresa.id, usuario["id"], accion_id, motivo_rechazo=datos.get("motivo"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "estado": accion.estado})
+
+
+@datos_meta_bp.post("/acciones/<int:accion_id>/cancelar")
+@login_required
+def acciones_cancelar(accion_id):
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+    accion, error = cancelar_propuesta(empresa.id, usuario["id"], accion_id)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "estado": accion.estado})
+
+
+@datos_meta_bp.post("/acciones/<int:accion_id>/ejecutar")
+@login_required
+def acciones_ejecutar(accion_id):
+    """Segundo paso de la doble confirmacion (Paso 12, punto 5) -- solo
+    ejecuta si el cuerpo trae `confirmacion: true` explicito, ademas de
+    que acciones.py vuelve a exigir el estado "aprobada"."""
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+    datos = request.get_json(silent=True) or {}
+
+    accion, error = ejecutar_accion(empresa.id, usuario["id"], accion_id, confirmacion=bool(datos.get("confirmacion")))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "accion": _serializar_accion(accion)})
+
+
+@datos_meta_bp.get("/acciones/<int:accion_id>/reversion")
+@login_required
+def acciones_reversion(accion_id):
+    empresa, _rol = _empresa_activa_o_404()
+    propuesta, error = preparar_reversion(empresa.id, accion_id)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "reversion": propuesta})
+
+
+@datos_meta_bp.post("/acciones/<int:accion_id>/preparar-reversion")
+@login_required
+def acciones_preparar_reversion(accion_id):
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+
+    propuesta, error = preparar_reversion(empresa.id, accion_id)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    nueva_accion, error = crear_propuesta(
+        empresa.id, usuario["id"],
+        entidad_id=propuesta["entidad_id"], tipo_accion=propuesta["tipo_accion"],
+        valor_propuesto=propuesta["valor_propuesto"], motivo=propuesta["motivo"],
+        origen="manual",
+    )
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "accion_id": nueva_accion.id}), 201

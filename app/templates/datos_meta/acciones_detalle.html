@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block titulo %}Acción #{{ accion.id }} · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Acción #{{ accion.id }}</h1>
+    <p class="perfil-nota"><span class="estado-badge acc-estado-{{ accion.estado }}" id="acc-estado-badge">{{ accion.estado.replace("_", " ") }}</span></p>
+  </div>
+  <a href="{{ url_for('datos_meta.acciones_lista') }}" class="boton-enlace">← Acciones</a>
+</div>
+
+<section>
+  <h2 class="ps-seccion-titulo">Recurso</h2>
+  <dl class="perfil-datos">
+    <dt>Empresa</dt><dd>{{ empresa_activa.nombre }}</dd>
+    <dt>Cuenta publicitaria</dt><dd>{{ accion.cuenta_publicitaria or "—" }}</dd>
+    {% if accion.campana %}<dt>Campaña</dt><dd>{{ accion.campana }}</dd>{% endif %}
+    {% if accion.conjunto %}<dt>Conjunto</dt><dd>{{ accion.conjunto }}</dd>{% endif %}
+    {% if accion.anuncio %}<dt>Anuncio</dt><dd>{{ accion.anuncio }}</dd>{% endif %}
+    <dt>Recurso objetivo</dt><dd>{{ accion.entidad_nombre }} ({{ accion.entidad_tipo }})</dd>
+  </dl>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Propuesta</h2>
+  <dl class="perfil-datos">
+    <dt>Tipo de acción</dt><dd>{{ accion.tipo_accion.replace("_", " ") | capitalize }}</dd>
+    <dt>Situación actual</dt><dd>{{ accion.valor_actual or "No disponible" }}</dd>
+    <dt>Propuesta</dt><dd>{{ accion.valor_propuesto or "—" }}</dd>
+    <dt id="acc-cambio-pct-dt" hidden>Cambio</dt><dd id="acc-cambio-pct" hidden></dd>
+    <dt>Motivo</dt><dd>{{ accion.motivo }}</dd>
+    {% if accion.evidencia %}<dt>Evidencia</dt><dd>{{ accion.evidencia }}</dd>{% endif %}
+    {% if accion.riesgo %}<dt>Riesgo</dt><dd>{{ accion.riesgo }}</dd>{% endif %}
+    <dt>Origen</dt><dd>{{ accion.origen }}</dd>
+    <dt>Fecha de creación</dt><dd>{{ accion.creado_en }}</dd>
+  </dl>
+
+  <p class="perfil-nota">Esto es una PROPUESTA. No se ha modificado nada en Meta todavía.</p>
+
+  {% if accion.estado in ("pendiente_de_aprobacion", "borrador") %}
+  <button type="button" class="boton-primario" id="acc-boton-aprobar">Aprobar</button>
+  <button type="button" class="boton-enlace" id="acc-boton-rechazar">Rechazar</button>
+  {% endif %}
+
+  {% if accion.estado == "aprobada" %}
+  <div id="acc-panel-ejecutar">
+    <button type="button" class="boton-primario" id="acc-boton-revisar-cambio">Revisar cambio</button>
+  </div>
+  <div id="acc-panel-confirmacion" hidden>
+    <div class="dm-alerta dm-alerta-atencion">
+      <p id="acc-texto-confirmacion"></p>
+      <p>Esto puede {% if accion.tipo_accion == "modificar_presupuesto" %}aumentar o disminuir el gasto publicitario de tu cuenta{% else %}cambiar si este recurso sigue mostrándose en Meta{% endif %}. ¿Quieres hacerlo?</p>
+    </div>
+    <button type="button" class="boton-enlace" id="acc-boton-no-ejecutar">NO</button>
+    <button type="button" class="boton-primario" id="acc-boton-confirmar-ejecutar">SÍ, EJECUTAR</button>
+  </div>
+  {% endif %}
+
+  {% if accion.estado == "ejecutada" %}
+  <div class="dm-oportunidad dm-oportunidad-bajo">
+    <p><strong>Acción ejecutada y verificada correctamente.</strong></p>
+    <p>Antes: {{ accion.valor_actual or "No disponible" }} — Después: {{ accion.resultado_meta.valor_confirmado if accion.resultado_meta else accion.valor_propuesto }}</p>
+    <p class="perfil-nota">Ejecutada el {{ accion.ejecutado_en }}.</p>
+  </div>
+  <button type="button" class="boton-enlace" id="acc-boton-preparar-reversion">Preparar reversión</button>
+  <p id="acc-reversion-mensaje" class="perfil-nota" hidden></p>
+  {% endif %}
+
+  {% if accion.estado == "error" %}
+  <div class="estado-vacio"><p><strong>No se ejecutó ningún cambio.</strong> {{ accion.error_mensaje }}</p></div>
+  <a href="{{ url_for('datos_meta.acciones_lista', entidad_id=accion.entidad_id, tipo_accion=accion.tipo_accion, motivo=accion.motivo) }}" class="boton-enlace">Crear una nueva propuesta corregida</a>
+  {% endif %}
+
+  {% if accion.estado == "rechazada" %}
+  <p class="perfil-nota">Esta propuesta fue rechazada. {{ accion.riesgo or "" }}</p>
+  {% endif %}
+
+  <p id="acc-mensaje-error" class="perfil-nota" hidden></p>
+</section>
+
+<script>
+  window.DM_ACCION = {{ accion | tojson }};
+  window.DM_ACCION_APROBAR_URL = "{{ url_for('datos_meta.acciones_aprobar', accion_id=accion.id) }}";
+  window.DM_ACCION_RECHAZAR_URL = "{{ url_for('datos_meta.acciones_rechazar', accion_id=accion.id) }}";
+  window.DM_ACCION_EJECUTAR_URL = "{{ url_for('datos_meta.acciones_ejecutar', accion_id=accion.id) }}";
+  window.DM_ACCION_PREPARAR_REVERSION_URL = "{{ url_for('datos_meta.acciones_preparar_reversion', accion_id=accion.id) }}";
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_acciones.js') }}"></script>
+{% endblock %}

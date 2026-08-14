@@ -26,6 +26,10 @@
 
   <section class="ia-panel ia-panel-chat">
     <div id="ia-mensajes" class="ia-mensajes"></div>
+    <p class="perfil-nota ia-link-accion-fila">
+      ¿La respuesta sugiere un cambio concreto? Conviértelo en una propuesta revisable (Paso 12) —
+      <a href="{{ url_for('datos_meta.acciones_lista') }}" id="ia-link-preparar-accion">Preparar acción</a>. Nunca se ejecuta nada automáticamente.
+    </p>
     <form id="ia-form-mensaje" class="ia-form-mensaje">
       <button type="button" class="ia-boton-adjunto" id="ia-boton-microfono" disabled title="Próximamente">🎤</button>
       <button type="button" class="ia-boton-adjunto" id="ia-boton-audio" disabled title="Próximamente">📎 Adjuntar audio</button>
@@ -87,7 +91,8 @@
     conversacionesCrear: "{{ url_for('estratega_ia.conversaciones_crear') }}",
     conversacionDetalleBase: "{{ url_for('estratega_ia.conversaciones_detalle', conversacion_id=0) }}".replace("/0", "/__ID__"),
     mensajeEnviarBase: "{{ url_for('estratega_ia.conversaciones_enviar_mensaje', conversacion_id=0) }}".replace("/0/", "/__ID__/"),
-    contexto: "{{ url_for('estratega_ia.contexto') }}"
+    contexto: "{{ url_for('estratega_ia.contexto') }}",
+    accionesLista: "{{ url_for('datos_meta.acciones_lista') }}"
   };
 </script>
 <script src="{{ url_for('static', filename='js/estratega_ia.js') }}"></script>

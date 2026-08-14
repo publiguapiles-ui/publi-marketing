@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block titulo %}Acciones · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Acciones — propone, revisa y aprueba cambios reales sobre Meta con doble confirmación. Ninguna acción se ejecuta sin tu aprobación explícita.</p>
+  </div>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+</div>
+
+<form method="get" class="formulario-simple dm-form-kpi">
+  <label>
+    Estado
+    <select name="estado" onchange="this.form.submit()">
+      <option value="">Todos</option>
+      {% for e in estados %}
+      <option value="{{ e }}" {% if e == estado_filtro %}selected{% endif %}>{{ e.replace("_", " ") | capitalize }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+<h2 class="ps-seccion-titulo">Propuestas</h2>
+{% if acciones %}
+<div class="dm-tabla-scroll">
+<table class="dm-tabla-kpi">
+  <thead>
+    <tr><th>Recurso</th><th>Tipo</th><th>Actual</th><th>Propuesto</th><th>Origen</th><th>Estado</th><th>Fecha</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for a in acciones %}
+    <tr>
+      <td>
+        {{ a.entidad_nombre }}
+        <div class="perfil-nota">{{ a.campana or "" }}{% if a.conjunto %} · {{ a.conjunto }}{% endif %}{% if a.anuncio %} · {{ a.anuncio }}{% endif %}</div>
+      </td>
+      <td>{{ a.tipo_accion.replace("_", " ") | capitalize }}</td>
+      <td>{{ a.valor_actual or "—" }}</td>
+      <td>{{ a.valor_propuesto or "—" }}</td>
+      <td>{{ a.origen }}</td>
+      <td><span class="estado-badge acc-estado-{{ a.estado }}">{{ a.estado.replace("_", " ") }}</span></td>
+      <td>{{ a.creado_en[:10] }}</td>
+      <td><a href="{{ url_for('datos_meta.acciones_detalle', accion_id=a.id) }}" class="boton-enlace">Revisar →</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="estado-vacio"><p>Todavía no hay ninguna acción propuesta.</p></div>
+{% endif %}
+
+<h2 class="ps-seccion-titulo">Nueva propuesta</h2>
+<p class="perfil-nota">Analiza primero en <a href="{{ url_for('datos_meta.optimizacion') }}">Optimización</a> o pregúntale al <a href="{{ url_for('estratega_ia.index') }}">Estratega IA</a> — esta propuesta queda en "Pendiente de aprobación", nunca se ejecuta automáticamente.</p>
+
+<form id="acc-form-crear" class="formulario-simple">
+  {% if entidad_prefill %}
+  <input type="hidden" name="entidad_id" value="{{ entidad_prefill.id }}" />
+  <p class="perfil-nota">Recurso seleccionado: <strong>{{ entidad_prefill.nombre or entidad_prefill.id_externo }}</strong> ({{ entidad_prefill.tipo }})</p>
+  {% else %}
+  <label>
+    Cuenta publicitaria
+    <select id="acc-cuenta">
+      <option value="">Selecciona una cuenta</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}">{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Campaña
+    <select id="acc-campana" disabled>
+      <option value="">Selecciona una campaña</option>
+    </select>
+  </label>
+  <label>
+    Conjunto de anuncios (opcional, solo si la acción es sobre un conjunto o anuncio)
+    <select id="acc-conjunto" disabled>
+      <option value="">Ninguno — acción sobre la campaña</option>
+    </select>
+  </label>
+  <label>
+    Anuncio (opcional, solo si la acción es sobre un anuncio)
+    <select id="acc-anuncio" disabled>
+      <option value="">Ninguno — acción sobre el conjunto</option>
+    </select>
+  </label>
+  <input type="hidden" name="entidad_id" id="acc-entidad-id" />
+  {% endif %}
+
+  <label>
+    Tipo de acción
+    <select name="tipo_accion" id="acc-tipo-accion">
+      {% for t in tipos_accion %}
+      <option value="{{ t }}" {% if t == tipo_accion_prefill %}selected{% endif %}>{{ t.replace("_", " ") | capitalize }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Valor propuesto (para pausar/activar: escribe "PAUSED" o "ACTIVE"; para presupuesto: el nuevo monto, en la misma unidad que ya muestra Meta) <input type="text" name="valor_propuesto" required /></label>
+  <label>Motivo <textarea name="motivo" rows="2" required>{{ motivo_prefill }}</textarea></label>
+  <label>Evidencia (opcional) <textarea name="evidencia" rows="2"></textarea></label>
+  <label>Riesgo (opcional) <textarea name="riesgo" rows="2"></textarea></label>
+  <button type="submit" class="boton-primario">Crear propuesta</button>
+  <p id="acc-crear-mensaje" class="perfil-nota" hidden></p>
+</form>
+
+<script>
+  window.DM_ACCIONES_CAMPANAS_URL = "{{ url_for('datos_meta.acciones_campanas') }}";
+  window.DM_ACCIONES_CONJUNTOS_URL = "{{ url_for('datos_meta.acciones_conjuntos') }}";
+  window.DM_ACCIONES_ANUNCIOS_URL = "{{ url_for('datos_meta.acciones_anuncios') }}";
+  window.DM_ACCIONES_CREAR_URL = "{{ url_for('datos_meta.acciones_crear') }}";
+  window.DM_ACCIONES_DETALLE_URL_BASE = "{{ url_for('datos_meta.acciones_detalle', accion_id=0) }}".replace("/0", "/__ID__");
+  window.DM_ACCIONES_TIENE_PREFILL = {{ (entidad_prefill is not none) | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_acciones.js') }}"></script>
+{% endblock %}

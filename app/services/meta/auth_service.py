@@ -14,9 +14,6 @@ from app.services.meta.client import MetaClient, _version_api
 
 # Scopes de solo lectura para el Paso 1: alcanza para descubrir cuentas
 # publicitarias/paginas/Instagram y leer insights en pasos futuros.
-# `ads_management` (crear/pausar campanas) se agrega deliberadamente
-# despues, cuando exista esa funcionalidad -- pedir permisos que
-# todavia no se usan es una mala practica frente a Meta App Review.
 #
 # "instagram_basic" quedo fuera (Paso 6, verificacion real): Meta
 # rechazo el dialogo de OAuth completo con "Invalid Scopes:
@@ -27,8 +24,18 @@ from app.services.meta.client import MetaClient, _version_api
 # es una decision de diseño, es la unica forma de que ads_read/
 # pages_show_list (el requisito central de este paso) funcionen hoy;
 # ver informe del Paso 6, pendientes.
+#
+# "ads_management" (Paso 12: pausar/activar/modificar presupuesto) se
+# agrega AHORA que esa funcionalidad existe -- hasta el Paso 11 pedir
+# este permiso habria sido una mala practica frente a Meta App Review
+# (pedir un permiso que el sistema no usa todavia). Una conexion
+# creada ANTES de este paso no lo tiene concedido (ver
+# MetaConexion.scopes_concedidos) -- acciones.py verifica esto
+# explicitamente antes de cualquier escritura y exige reconectar si
+# falta, nunca asume que esta presente.
 SCOPES_PREDETERMINADOS = [
     "ads_read",
+    "ads_management",
     "pages_show_list",
     "pages_read_engagement",
     "business_management",

@@ -1,4 +1,4 @@
-"""Pruebas del Paso 6: conexion real con Meta, solo lectura.
+"""Pruebas del Paso 6: conexion real con Meta.
 
 Los flujos de OAuth, descubrimiento/vinculacion de activos y
 sincronizacion de campanas/conjuntos/anuncios/insights ya se
@@ -8,7 +8,9 @@ nuevo del Paso 6: deteccion PROACTIVA de expiracion de token (sin
 esperar un error real de Meta), que una conexion no activa (expirada/
 revocada/con error) siga siendo visible en la pantalla de Conexiones
 en vez de confundirse con "nunca se conecto", y que los permisos
-solicitados sigan siendo unicamente de lectura.
+solicitados sean exactamente los que el sistema realmente usa a la
+fecha (ni de mas, ni de menos) -- ver Paso 12 para el agregado real de
+"ads_management".
 """
 
 import datetime
@@ -16,14 +18,27 @@ import datetime
 from tests.conftest import iniciar_sesion_de_prueba
 
 
-# --- Permisos de solo lectura --------------------------------------------------------
+# --- Permisos: solo los que el sistema realmente usa -----------------------------------
 
-def test_scopes_predeterminados_son_solo_lectura():
+def test_scopes_predeterminados_no_piden_permisos_sin_usar_todavia():
+    """Pedir un permiso que el sistema no usa es mala practica frente a
+    Meta App Review -- estos siguen sin implementarse (Paso 12, punto
+    14: publicacion, gestion de paginas/Instagram)."""
     from app.services.meta.auth_service import SCOPES_PREDETERMINADOS
 
-    permisos_de_escritura = {"ads_management", "pages_manage_posts", "pages_manage_ads", "instagram_content_publish"}
-    assert not (permisos_de_escritura & set(SCOPES_PREDETERMINADOS))
+    permisos_todavia_no_usados = {"pages_manage_posts", "pages_manage_ads", "instagram_content_publish"}
+    assert not (permisos_todavia_no_usados & set(SCOPES_PREDETERMINADOS))
     assert "ads_read" in SCOPES_PREDETERMINADOS
+
+
+def test_scopes_predeterminados_incluyen_ads_management_desde_el_paso_12():
+    """ads_management se agrega deliberadamente en el Paso 12 (pausar/
+    activar/modificar presupuesto) -- una conexion creada ANTES de este
+    paso no lo tiene concedido todavia (ver
+    test_acciones_meta_paso12.py::test_ejecutar_accion_sin_permiso_ads_management_no_ejecuta)."""
+    from app.services.meta.auth_service import SCOPES_PREDETERMINADOS
+
+    assert "ads_management" in SCOPES_PREDETERMINADOS
 
 
 # --- Deteccion proactiva de expiracion ------------------------------------------------

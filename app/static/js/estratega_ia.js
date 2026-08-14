@@ -204,6 +204,18 @@
     const resp = await fetch(`${window.DM_IA_URLS.contexto}?${params.toString()}`);
     const datos = await resp.json();
     renderContexto(datos);
+
+    // El enlace "Preparar accion" (Paso 12) sigue el mismo recurso que
+    // el panel de contexto -- nunca crea nada por su cuenta, solo abre
+    // el Centro de Acciones con la cuenta ya seleccionada.
+    const enlaceAccion = document.getElementById("ia-link-preparar-accion");
+    if (enlaceAccion && window.DM_IA_URLS.accionesLista) {
+      const paramsAccion = new URLSearchParams();
+      if (cuentaId) paramsAccion.set("cuenta_id", cuentaId);
+      enlaceAccion.href = paramsAccion.toString()
+        ? `${window.DM_IA_URLS.accionesLista}?${paramsAccion.toString()}`
+        : window.DM_IA_URLS.accionesLista;
+    }
   }
 
   // --- Movil: paneles desplegables -----------------------------------------------------
