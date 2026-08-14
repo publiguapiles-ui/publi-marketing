@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block titulo %}Chat de Pauta · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Chat de Pauta</h1>
+    <p class="perfil-nota">Pregúntale en lenguaje natural sobre tus campañas, audiencias y KPI reales. No crea, modifica ni publica nada en Meta; toda propuesta requiere tu aprobación.</p>
+  </div>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+</div>
+
+{% if not ia_configurada %}
+<div class="estado-vacio">
+  <p><strong>El asistente de IA no está configurado en este entorno.</strong></p>
+  <p class="perfil-nota">Falta la variable de entorno ANTHROPIC_API_KEY. La interfaz y el contexto funcionan igual — solo falta conectar el modelo.</p>
+</div>
+{% endif %}
+
+<form method="get" id="cp-filtros" class="formulario-simple dm-form-kpi">
+  <label>Empresa <input type="text" value="{{ empresa_activa.nombre }}" disabled /></label>
+  <label>
+    Cuenta publicitaria
+    <select name="cuenta_id" id="cp-cuenta">
+      <option value="">Toda la empresa</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}" {% if cuenta_id == cuenta.id %}selected{% endif %}>{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Período
+    <select name="periodo" id="cp-periodo">
+      {% for p in periodos %}
+      {% if p != "personalizado" %}
+      <option value="{{ p }}" {% if p == periodo_clave %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Conversaciones anteriores
+    <select id="cp-conversaciones">
+      <option value="">+ Nueva conversación</option>
+      {% for c in conversaciones %}
+      <option value="{{ c.id }}" {% if c.id == conversacion_inicial_id %}selected{% endif %}>{{ c.titulo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+<section class="cp-chat">
+  <div id="cp-mensajes" class="ia-mensajes cp-mensajes"></div>
+
+  <div id="cp-sugerencias" class="cp-sugerencias">
+    <p class="perfil-nota">Prueba con:</p>
+    <div class="cp-sugerencias-grid">
+      <button type="button" class="boton-enlace cp-sugerencia">¿Qué está funcionando?</button>
+      <button type="button" class="boton-enlace cp-sugerencia">¿Qué está fallando?</button>
+      <button type="button" class="boton-enlace cp-sugerencia">¿Cuál campaña debo revisar?</button>
+      <button type="button" class="boton-enlace cp-sugerencia">Compara mis campañas.</button>
+      <button type="button" class="boton-enlace cp-sugerencia">Analiza mis audiencias.</button>
+      <button type="button" class="boton-enlace cp-sugerencia">¿Dónde estoy gastando más?</button>
+      <button type="button" class="boton-enlace cp-sugerencia">¿Qué harías con mi presupuesto?</button>
+    </div>
+  </div>
+
+  <p id="cp-error-audio" class="perfil-nota" hidden></p>
+  <form id="cp-form-mensaje" class="ia-form-mensaje">
+    <button type="button" class="cp-boton-mic" id="cp-boton-mic" title="Grabar pregunta por voz">🎤</button>
+    <textarea id="cp-input-mensaje" placeholder="Escribe tu pregunta…" rows="2" {% if not ia_configurada %}disabled{% endif %}></textarea>
+    <button type="submit" class="boton-primario" id="cp-boton-enviar" {% if not ia_configurada %}disabled{% endif %}>Enviar</button>
+  </form>
+  <p id="cp-mensaje-error" class="perfil-nota" hidden></p>
+</section>
+
+<script>
+  window.DM_CP_CONFIGURADA = {{ ia_configurada | tojson }};
+  window.DM_CP_CONVERSACION_INICIAL_ID = {{ conversacion_inicial_id | tojson }};
+  window.DM_CP_ETIQUETAS_PERIODOS = {{ etiquetas_periodos | tojson }};
+  window.DM_CP_EMPRESA_NOMBRE = {{ empresa_activa.nombre | tojson }};
+  window.DM_CP_URLS = {
+    conversacionesCrear: "{{ url_for('estratega_ia.conversaciones_crear') }}",
+    conversacionDetalleBase: "{{ url_for('estratega_ia.conversaciones_detalle', conversacion_id=0) }}".replace("/0", "/__ID__"),
+    mensajeEnviarBase: "{{ url_for('estratega_ia.conversaciones_enviar_mensaje', conversacion_id=0) }}".replace("/0/", "/__ID__/"),
+    dashboard: "{{ url_for('datos_meta.dashboard') }}",
+    accionesLista: "{{ url_for('datos_meta.acciones_lista') }}",
+    chatPautaBase: "{{ url_for('datos_meta.chat_pauta') }}"
+  };
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_chat_pauta.js') }}"></script>
+{% endblock %}

@@ -1741,3 +1741,53 @@ def acciones_preparar_reversion(accion_id):
     if error:
         return jsonify({"ok": False, "error": error}), 400
     return jsonify({"ok": True, "accion_id": nueva_accion.id}), 201
+
+
+# --- Chat de Pauta (Paso 13) ---------------------------------------------------------
+#
+# NO es un sistema de analisis nuevo: esta pantalla es una segunda
+# puerta de entrada al MISMO backend del Estratega IA (Paso 10) --
+# mismas ConversacionIA/MensajeIA, mismo estratega_ia.responder()
+# (que ya reutiliza inteligencia.py y proyectos_estrategicos.py sin
+# duplicar nada). La transcripcion de voz se hace 100% en el navegador
+# (Web Speech API, ver datos_meta_chat_pauta.js) -- nunca se sube ni se
+# guarda un archivo de audio, solo el texto ya transcrito, como
+# cualquier otro mensaje.
+
+def _serializar_conversacion_chat(c):
+    return {"id": c.id, "titulo": c.titulo or "Nueva conversación", "actualizado_en": c.actualizado_en.isoformat()}
+
+
+@datos_meta_bp.get("/chat")
+@login_required
+def chat_pauta():
+    empresa, _rol = _empresa_activa_o_404()
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+
+    cuenta_id = request.args.get("cuenta_id", type=int)
+    periodo_clave = request.args.get("periodo") or "ultimos_30_dias"
+    if periodo_clave not in PERIODOS_PREDEFINIDOS or periodo_clave == "personalizado":
+        periodo_clave = "ultimos_30_dias"
+
+    from app.services.estratega_ia import listar_conversaciones_empresa, obtener_conversacion
+    from app.services.ia import ia_configurada
+
+    conversacion_id = request.args.get("conversacion_id", type=int)
+    conversacion_inicial = None
+    if conversacion_id is not None:
+        conversacion_inicial = obtener_conversacion(empresa.id, conversacion_id)
+        if conversacion_inicial is None:
+            abort(404)
+
+    return render_template(
+        "datos_meta/chat_pauta.html",
+        empresa_activa=empresa,
+        cuentas=cuentas,
+        cuenta_id=cuenta_id,
+        periodo_clave=periodo_clave,
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+        conversaciones=[_serializar_conversacion_chat(c) for c in listar_conversaciones_empresa(empresa.id)],
+        conversacion_inicial_id=conversacion_inicial.id if conversacion_inicial else None,
+        ia_configurada=ia_configurada(),
+    )
