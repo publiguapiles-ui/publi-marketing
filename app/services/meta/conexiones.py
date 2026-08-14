@@ -189,12 +189,23 @@ def marcar_error(conexion, mensaje, categoria=None):
 
 
 def registrar_sincronizacion_exitosa(conexion):
+    """Bug real encontrado y corregido: un error TRANSITORIO (categoria
+    'temporal'/'limite_api'/etc, ver CATEGORIAS_QUE_INVALIDAN_CONEXION)
+    deja `ultimo_error` con el detalle real de Meta pero NUNCA cambia
+    `estado` a "error" -- por diseno, el token sigue sirviendo. Antes,
+    `ultimo_error` solo se limpiaba dentro del `if conexion.estado ==
+    "error"`, asi que una conexion que jamas dejo de estar "activa"
+    (el caso mas comun: fallos transitorios repetidos) se quedaba
+    mostrando para siempre el ultimo error viejo, incluso despues de
+    una sincronizacion real exitosa. `ultimo_error` ahora se limpia
+    SIEMPRE que una sincronizacion termina bien, sin importar el estado
+    de la conexion."""
     from app.extensions import db
 
     conexion.ultima_sincronizacion_en = datetime.now(timezone.utc)
+    conexion.ultimo_error = None
     if conexion.estado == "error":
         conexion.estado = "activa"
-        conexion.ultimo_error = None
     db.session.commit()
     return conexion
 

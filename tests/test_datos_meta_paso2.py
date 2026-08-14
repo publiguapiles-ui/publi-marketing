@@ -196,6 +196,28 @@ def test_mensaje_para_usuario_sin_uso_meta_no_inventa_numeros():
     assert mensaje == "Se alcanzó el límite de solicitudes de Meta. Intenta de nuevo en unos minutos."
 
 
+def test_detalle_tecnico_incluye_codigo_subcodigo_y_tipo():
+    """Paso 6 (diagnostico): lo que se guarda en MetaConexion.ultimo_error
+    debe incluir el codigo/subcodigo/tipo reales que Meta devolvio, no
+    solo el mensaje generico -- str(excepcion) por si solo pierde esos
+    atributos."""
+    from app.services.meta.client import MetaAPIError
+    from app.services.meta.errores import detalle_tecnico
+
+    exc = MetaAPIError("(#100) Invalid parameter", codigo=100, tipo="OAuthException", subcodigo=33)
+    detalle = detalle_tecnico(exc)
+    assert "(#100) Invalid parameter" in detalle
+    assert "code=100" in detalle
+    assert "subcode=33" in detalle
+    assert "type=OAuthException" in detalle
+
+
+def test_detalle_tecnico_sin_excepcion_es_none():
+    from app.services.meta.errores import detalle_tecnico
+
+    assert detalle_tecnico(None) is None
+
+
 def test_mensaje_para_usuario_sigue_funcionando_sin_excepcion():
     from app.services.meta.errores import mensaje_para_usuario
 
@@ -302,6 +324,31 @@ def test_sincronizar_estructura_error_transitorio_no_invalida_la_conexion(client
         conexion = obtener_conexion_activa(usuario_a_con_empresa["empresa_id"])
         assert conexion is not None  # sigue activa
         assert conexion.ultimo_error is not None  # pero el error queda registrado
+
+
+def test_registrar_sincronizacion_exitosa_limpia_ultimo_error_aunque_la_conexion_nunca_cambio_de_estado(client, usuario_a_con_empresa):
+    """Bug real encontrado durante el diagnostico del Paso 6: un error
+    transitorio deja `ultimo_error` con el detalle real de Meta pero
+    NUNCA invalida la conexion (categoria fuera de
+    CATEGORIAS_QUE_INVALIDAN_CONEXION, sigue "activa"). Antes,
+    registrar_sincronizacion_exitosa() solo limpiaba `ultimo_error`
+    dentro del `if conexion.estado == "error"`, asi que una conexion
+    que jamas dejo de estar "activa" se quedaba mostrando el error
+    viejo PARA SIEMPRE en la base de datos, incluso despues de una
+    sincronizacion real exitosa -- y por lo tanto tambien en la
+    pantalla de Conexiones una vez que dejara de estar oculto ahi. Debe
+    limpiarse siempre que una sincronizacion termina bien."""
+    from app.services.meta.conexiones import crear_conexion, marcar_error, registrar_sincronizacion_exitosa
+
+    with client.application.app_context():
+        conexion = crear_conexion(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "111", "A", "token-a")
+        marcar_error(conexion, "Rate limited (code 613)", categoria="limite_api")
+        assert conexion.estado == "activa"  # el error transitorio nunca invalida la conexion
+        assert conexion.ultimo_error is not None
+
+        registrar_sincronizacion_exitosa(conexion)
+        assert conexion.estado == "activa"
+        assert conexion.ultimo_error is None  # el error viejo ya no debe quedar "pegado"
 
 
 # --- Insights (metricas reales) ---------------------------------------------------

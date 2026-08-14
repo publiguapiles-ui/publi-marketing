@@ -47,6 +47,30 @@ _CODIGOS_CONOCIDOS = {
 }
 
 
+def detalle_tecnico(excepcion):
+    """Representacion COMPLETA de un MetaAPIError para diagnostico
+    interno (lo que se guarda en MetaConexion.ultimo_error) -- incluye
+    codigo/subcodigo/tipo documentados por Meta ademas del mensaje,
+    nunca solo el mensaje generico. `str(excepcion)` por si solo pierde
+    el codigo/subcodigo (son atributos aparte, ver MetaAPIError), que es
+    justo lo que hace falta para diagnosticar un error real sin
+    adivinar. Nunca incluye el token de acceso ni ningun secreto --
+    MetaAPIError nunca los guarda como atributo."""
+    if excepcion is None:
+        return None
+    partes = [str(excepcion)]
+    etiquetas = []
+    if getattr(excepcion, "codigo", None) is not None:
+        etiquetas.append(f"code={excepcion.codigo}")
+    if getattr(excepcion, "subcodigo", None) is not None:
+        etiquetas.append(f"subcode={excepcion.subcodigo}")
+    if getattr(excepcion, "tipo", None):
+        etiquetas.append(f"type={excepcion.tipo}")
+    if etiquetas:
+        partes.append(f"({', '.join(etiquetas)})")
+    return " ".join(partes)
+
+
 def clasificar_error_meta(excepcion):
     """Recibe un MetaAPIError (ver app/services/meta/client.py) y
     devuelve una de CATEGORIAS_ERROR_META. Nunca lanza -- si no puede

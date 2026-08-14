@@ -90,7 +90,7 @@ def sincronizar_insights(empresa_id, fecha_inicio, fecha_fin, niveles=None, sinc
     from app.services.meta.client import MetaAPIError
     from app.services.meta.conexiones import marcar_error, obtener_cliente_para_empresa, obtener_conexion_activa
     from app.services.meta.cuentas_service import listar_entidades_empresa
-    from app.services.meta.errores import clasificar_error_meta, mensaje_para_usuario
+    from app.services.meta.errores import clasificar_error_meta, detalle_tecnico, mensaje_para_usuario
     from app.services.metricas import reemplazar_metricas_del_dia, registrar_metricas_nativas_y_calculadas
 
     cliente, error = obtener_cliente_para_empresa(empresa_id)
@@ -159,7 +159,7 @@ def sincronizar_insights(empresa_id, fecha_inicio, fecha_fin, niveles=None, sinc
 
         db.session.rollback()
         categoria = clasificar_error_meta(exc)
-        marcar_error(conexion, str(exc), categoria=categoria)
+        marcar_error(conexion, detalle_tecnico(exc), categoria=categoria)
         return None, mensaje_para_usuario(categoria, exc)
 
 

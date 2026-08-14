@@ -49,10 +49,16 @@
       <dt>Estado</dt>
       <dd>
         <span class="estado-badge estado-badge-{{ conexion.estado }}">{{ conexion.estado }}</span>
-        {% if conexion.estado != "activa" and conexion.ultimo_error %}
-        <span class="perfil-nota">— {{ conexion.ultimo_error }}</span>
-        {% endif %}
       </dd>
+      {% if conexion.ultimo_error %}
+      <dt>Último error real de Meta</dt>
+      <dd>
+        <span class="perfil-nota">
+          {{ conexion.ultimo_error }}
+          {% if conexion.estado == "activa" %}(la conexión sigue activa — este es el detalle técnico de la última sincronización fallida, se limpia solo en la próxima que sí funcione){% endif %}
+        </span>
+      </dd>
+      {% endif %}
       <dt>Permisos concedidos</dt>
       <dd>{{ conexion.scopes_concedidos or "—" }}</dd>
       <dt>Token vence</dt>

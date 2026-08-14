@@ -76,7 +76,7 @@ def sincronizar_estructura(empresa_id):
     from app.services.meta.client import MetaAPIError
     from app.services.meta.conexiones import marcar_error, obtener_cliente_para_empresa, obtener_conexion_activa
     from app.services.meta.cuentas_service import _upsert_entidad, listar_entidades_empresa
-    from app.services.meta.errores import clasificar_error_meta, mensaje_para_usuario
+    from app.services.meta.errores import clasificar_error_meta, detalle_tecnico, mensaje_para_usuario
 
     cliente, error = obtener_cliente_para_empresa(empresa_id)
     if cliente is None:
@@ -128,5 +128,5 @@ def sincronizar_estructura(empresa_id):
 
         db.session.rollback()
         categoria = clasificar_error_meta(exc)
-        marcar_error(conexion, str(exc), categoria=categoria)
+        marcar_error(conexion, detalle_tecnico(exc), categoria=categoria)
         return None, mensaje_para_usuario(categoria, exc)
