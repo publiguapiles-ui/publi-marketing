@@ -13,7 +13,18 @@ import os
 
 import requests
 
-TIEMPO_ESPERA_SEGUNDOS = 15
+# Causa raiz real encontrada en produccion (Paso 6, diagnostico): un
+# timeout de 15s es demasiado agresivo para /insights de la Marketing
+# API -- Meta puede tardar mas que eso en responder bajo carga real,
+# sobre todo con varios dias de datos. Cuando eso pasaba, requests
+# lanzaba ReadTimeout, MetaClient lo envolvia como "No se pudo
+# contactar a Meta: ..." y errores.clasificar_error_meta lo clasificaba
+# como "temporal" -- el usuario veia "Meta tuvo un problema temporal"
+# una y otra vez, cuando el problema nunca fue de Meta ni de limite de
+# cuota, era nuestro propio timeout demasiado corto. 60s da margen real
+# sin arriesgar el timeout de gunicorn (300s, ver Procfile), incluso
+# sincronizando muchas entidades una por una (insights_service.py).
+TIEMPO_ESPERA_SEGUNDOS = 60
 
 # Headers documentados por Meta para reportar cuanto de la cuota de
 # solicitudes ya se consumio (https://developers.facebook.com/docs/
