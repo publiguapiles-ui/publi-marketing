@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block titulo %}Nuevo informe · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Nuevo informe</h1>
+    <p class="perfil-nota">Selecciona empresa, cuenta, período y tipo de informe. Los datos se calculan con los mismos motores de Optimización, Inteligencia y Presupuesto ya construidos.</p>
+  </div>
+  <a href="{{ url_for('datos_meta.informes_lista') }}" class="boton-enlace">← Informes</a>
+</div>
+
+<form method="get" id="inf-form-cuenta" class="formulario-simple dm-form-kpi">
+  <label>Empresa <input type="text" value="{{ empresa_activa.nombre }}" disabled /></label>
+  <label>
+    Cuenta publicitaria
+    <select name="cuenta_id" id="inf-nuevo-cuenta">
+      <option value="">Selecciona una cuenta</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}" {% if cuenta_id == cuenta.id %}selected{% endif %}>{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+{% if not cuenta_id %}
+<div class="estado-vacio"><p>Selecciona una cuenta publicitaria para continuar.</p></div>
+{% else %}
+<form id="inf-form-crear" class="formulario-simple dm-form-kpi">
+  <label>
+    Tipo de informe
+    <select name="tipo" id="inf-tipo-nuevo">
+      {% for t in tipos_informe %}
+      <option value="{{ t }}">{{ etiquetas_tipo[t] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Período
+    <select name="periodo" id="inf-periodo-nuevo">
+      {% for p in periodos %}
+      <option value="{{ p }}">{{ etiquetas_periodos[p] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="dm-campo-periodo" id="inf-personalizado" hidden>
+    <label>Desde <input type="date" id="inf-fecha-inicio" /></label>
+    <label>Hasta <input type="date" id="inf-fecha-fin" /></label>
+  </div>
+  <label>
+    Comparar con
+    <select name="tipo_comparacion" id="inf-comparar-nuevo">
+      {% for clave, etiqueta in etiquetas_comparacion.items() %}
+      <option value="{{ clave }}">{{ etiqueta }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <fieldset class="inf-fieldset-opcional">
+    <legend>Opcional: acotar el informe</legend>
+    {% if campanas %}
+    <div class="inf-checkbox-grupo">
+      <p class="perfil-nota">Campañas (si no eliges ninguna, se incluyen todas)</p>
+      {% for c in campanas %}
+      <label class="inf-checkbox"><input type="checkbox" class="inf-campana-check" value="{{ c.id }}" /> {{ c.nombre or c.id_externo }}</label>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if objetivos %}
+    <label>
+      Objetivo
+      <select name="objetivo" id="inf-objetivo-nuevo">
+        <option value="">Todos</option>
+        {% for o in objetivos %}
+        <option value="{{ o }}">{{ o }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    {% if audiencias %}
+    <div class="inf-checkbox-grupo">
+      <p class="perfil-nota">Audiencias / conjuntos (si no eliges ninguna, se incluyen todas)</p>
+      {% for a in audiencias %}
+      <label class="inf-checkbox"><input type="checkbox" class="inf-audiencia-check" value="{{ a.id }}" /> {{ a.nombre or a.id_externo }}</label>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </fieldset>
+
+  {% if ia_configurada %}
+  <label class="inf-checkbox">
+    <input type="checkbox" id="inf-generar-claude" /> Generar el resumen ejecutivo con Claude
+  </label>
+  {% else %}
+  <p class="perfil-nota">El asistente de IA no está configurado en este entorno — el resumen se generará automáticamente a partir de los datos reales.</p>
+  {% endif %}
+
+  <input type="hidden" id="inf-cuenta-id-form" value="{{ cuenta_id }}" />
+  <button type="submit" class="boton-primario" id="inf-boton-crear">Generar informe</button>
+</form>
+<p id="inf-error" class="perfil-nota" hidden></p>
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/datos_meta_informes.js') }}"></script>
+{% endblock %}

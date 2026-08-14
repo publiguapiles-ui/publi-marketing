@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block titulo %}{{ informe.titulo }} · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>{{ informe.titulo }}</h1>
+    <p class="perfil-nota">
+      Versión #{{ informe.version }} · Generado el {{ informe.creado_en.strftime("%d/%m/%Y %H:%M") }} ·
+      Período {{ informe.fecha_inicio.isoformat() }} — {{ informe.fecha_fin.isoformat() }}
+      {% if informe.resumen_generado_por == "claude" %} · Resumen generado por Claude{% endif %}
+    </p>
+  </div>
+  <div>
+    <a href="{{ url_for('datos_meta.informes_lista') }}" class="boton-enlace">← Informes</a>
+  </div>
+</div>
+
+<div class="inf-modo-barra">
+  <a href="{{ url_for('datos_meta.informes_detalle', informe_id=informe.id, modo='interno') }}" class="boton-enlace {{ 'boton-primario' if modo == 'interno' }}">Modo interno</a>
+  <a href="{{ url_for('datos_meta.informes_detalle', informe_id=informe.id, modo='cliente') }}" class="boton-enlace {{ 'boton-primario' if modo == 'cliente' }}">Modo cliente</a>
+  <a href="{{ url_for('datos_meta.informes_descargar_pdf', informe_id=informe.id, modo=modo) }}" class="boton-primario">Descargar PDF</a>
+</div>
+
+{% if informe.estado == "error" %}
+<div class="estado-vacio"><p>Este informe no pudo generarse: {{ informe.error_mensaje }}</p></div>
+{% elif not contenido %}
+<div class="estado-vacio"><p>Este informe no tiene contenido disponible.</p></div>
+{% else %}
+
+{% if "resumen" in contenido.secciones %}
+<section>
+  <h2 class="ps-seccion-titulo">Resumen</h2>
+  <p>Durante el período analizado se invirtieron <strong>{{ contenido.resumen.inversion if contenido.resumen.inversion is not none else "No disponible" }} {{ contenido.resumen.moneda or "" }}</strong>
+     y se obtuvieron <strong>{{ contenido.resumen.resultados if contenido.resumen.resultados is not none else "No disponible" }} resultados</strong>,
+     a un costo promedio de <strong>{{ contenido.resumen.costo_por_resultado if contenido.resumen.costo_por_resultado is not none else "No disponible" }} {{ contenido.resumen.moneda or "" }}</strong> por resultado.</p>
+  {% if contenido.resumen.comparacion_texto %}<p>{{ contenido.resumen.comparacion_texto }}</p>{% endif %}
+  <p><strong>Conclusión:</strong> {{ contenido.resumen.conclusion }}</p>
+  {% if contenido.resumen.aviso_claude %}<p class="perfil-nota">No se pudo generar el resumen con Claude ({{ contenido.resumen.aviso_claude }}); se muestra el resumen generado automáticamente.</p>{% endif %}
+</section>
+{% endif %}
+
+{% if "kpis" in contenido.secciones %}
+<section>
+  <h2 class="ps-seccion-titulo">KPI del período</h2>
+  <div class="dm-cards-kpi">
+    {% for clave in contenido.claves_kpi %}
+    {% if contenido.kpis.get(clave) is not none %}
+    <div class="dm-card-kpi">
+      <div class="dm-card-kpi-etiqueta">{{ contenido.etiquetas_kpi[clave] }}</div>
+      <div class="dm-card-kpi-valor">{{ contenido.kpis[clave] }}</div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if "comparacion" in contenido.secciones and contenido.comparacion_periodos %}
+<section>
+  <h2 class="ps-seccion-titulo">Comparación con el período de referencia</h2>
+  <div class="dm-tabla-scroll">
+    <table class="dm-tabla-kpi">
+      <thead><tr><th>KPI</th><th>Período actual</th><th>Período comparado</th><th>Variación</th></tr></thead>
+      <tbody>
+        {% for clave in contenido.claves_kpi %}
+        {% set actual = contenido.comparacion_periodos.periodo_actual.kpis.get(clave) %}
+        {% set anterior = contenido.comparacion_periodos.periodo_anterior.kpis.get(clave) %}
+        {% set variacion = contenido.comparacion_periodos.variacion_porcentual.get(clave) %}
+        {% if actual is not none or anterior is not none %}
+        <tr>
+          <td>{{ contenido.etiquetas_kpi[clave] }}</td>
+          <td>{{ actual if actual is not none else "No disponible" }}</td>
+          <td>{{ anterior if anterior is not none else "No disponible" }}</td>
+          <td>
+            {% if variacion is none %}—
+            {% elif variacion > 0 %}<span class="dm-variacion-positiva">↑ +{{ variacion }}%</span>
+            {% elif variacion < 0 %}<span class="dm-variacion-negativa">↓ {{ variacion }}%</span>
+            {% else %}→ 0%{% endif %}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if "campanas" in contenido.secciones %}
+<section>
+  <h2 class="ps-seccion-titulo">Campañas</h2>
+  {% if contenido.campanas %}
+  <div class="dm-tabla-scroll">
+    <table class="dm-tabla-kpi">
+      <thead><tr><th>Campaña</th><th>Estado</th><th>Inversión</th><th>Resultados</th><th>Costo/Resultado</th><th>CTR</th><th>ROAS</th><th>Variación</th></tr></thead>
+      <tbody>
+        {% for c in contenido.campanas %}
+        <tr>
+          <td>{{ c.nombre }}</td>
+          <td>{{ c.estado or "—" }}</td>
+          <td>{{ c.kpis.spend if c.kpis.spend is not none else "No disponible" }}</td>
+          <td>{{ c.kpis.resultados if c.kpis.resultados is not none else "No disponible" }}</td>
+          <td>{{ c.kpis.costo_por_resultado if c.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+          <td>{{ (c.kpis.ctr ~ "%") if c.kpis.ctr is not none else "No disponible" }}</td>
+          <td>{{ c.kpis.roas if c.kpis.roas is not none else "No disponible" }}</td>
+          <td>
+            {% if c.veredicto_temporal == "mejora_significativa" %}<span class="dm-badge-mejor">↑ Mejoró</span>
+            {% elif c.veredicto_temporal == "deterioro" %}<span class="dm-badge-peor">↓ Empeoró</span>
+            {% else %}<span class="dm-badge-neutro">→ Sin cambio</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if contenido.mejores_campanas %}
+  <p><strong>Mejores campañas:</strong> {{ contenido.mejores_campanas | map(attribute="nombre") | join(", ") }}</p>
+  {% endif %}
+  {% if contenido.campanas_atencion %}
+  <p><strong>Campañas que necesitan atención:</strong> {{ contenido.campanas_atencion | map(attribute="nombre") | join(", ") }}</p>
+  {% endif %}
+  {% else %}
+  <p class="perfil-nota">No hay campañas sincronizadas para este período.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if "audiencias" in contenido.secciones and contenido.audiencias %}
+<section>
+  <h2 class="ps-seccion-titulo">Audiencias</h2>
+  <div class="dm-tabla-scroll">
+    <table class="dm-tabla-kpi">
+      <thead><tr><th>Audiencia</th><th>Campaña</th><th>Inversión</th><th>Resultados</th><th>Costo/Resultado</th><th>CTR</th><th>Frecuencia</th><th>Rendimiento</th></tr></thead>
+      <tbody>
+        {% for s in contenido.audiencias.segmentos %}
+        <tr>
+          <td>{{ s.nombre }}</td>
+          <td>{{ s.campana_nombre or "—" }}</td>
+          <td>{{ s.kpis.spend if s.kpis.spend is not none else "No disponible" }}</td>
+          <td>{{ s.kpis.resultados if s.kpis.resultados is not none else "No disponible" }}</td>
+          <td>{{ s.kpis.costo_por_resultado if s.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+          <td>{{ (s.kpis.ctr ~ "%") if s.kpis.ctr is not none else "No disponible" }}</td>
+          <td>{{ s.kpis.frequency if s.kpis.frequency is not none else "No disponible" }}</td>
+          <td>{% if s.es_mejor %}<span class="dm-badge-mejor">Mejor</span>{% elif s.es_peor %}<span class="dm-badge-peor">Peor</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if "diagnostico" in contenido.secciones and contenido.diagnostico %}
+<section>
+  <h2 class="ps-seccion-titulo">Diagnóstico</h2>
+  <div class="inf-diagnostico-grid">
+    {% for titulo, clave in [("Qué funcionó","que_funciono"), ("Qué empeoró","que_empeoro"), ("Qué cambió","que_cambio"), ("Qué requiere atención","que_requiere_atencion")] %}
+    <div>
+      <h3>{{ titulo }}</h3>
+      {% if contenido.diagnostico[clave] %}
+      <ul class="lista-simple">{% for item in contenido.diagnostico[clave] %}<li>{{ item }}</li>{% endfor %}</ul>
+      {% else %}<p class="perfil-nota">Nada destacable con los datos y umbrales actuales.</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if "oportunidades" in contenido.secciones %}
+<section>
+  <h2 class="ps-seccion-titulo">Oportunidades</h2>
+  {% if contenido.oportunidades %}
+  <div class="opt-lista-recomendaciones">
+    {% for o in contenido.oportunidades %}
+    <div class="opt-recomendacion opt-recomendacion-{{ o.prioridad }}">
+      <div class="opt-recomendacion-cabecera">
+        <span class="opt-badge-prioridad opt-badge-prioridad-{{ o.prioridad }}">{{ o.prioridad.upper() }}</span>
+        <strong>{{ o.entidad_nombre }}</strong>
+      </div>
+      <dl class="opt-recomendacion-detalle">
+        <dt>Qué detectamos</dt><dd>{{ o.que_paso }}</dd>
+        <dt>Evidencia</dt><dd>{{ o.evidencia }}</dd>
+        <dt>Recomendación</dt><dd>{{ o.recomendacion }}</dd>
+        <dt>Riesgo</dt><dd>{{ o.riesgo }}</dd>
+      </dl>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="perfil-nota">No se detectó ninguna oportunidad con los datos y umbrales actuales para este período.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if "recomendaciones" in contenido.secciones %}
+<section>
+  <h2 class="ps-seccion-titulo">Recomendaciones para el siguiente período</h2>
+  {% if contenido.recomendaciones %}
+  <ol>{% for r in contenido.recomendaciones %}<li>{{ r }}</li>{% endfor %}</ol>
+  {% else %}
+  <p class="perfil-nota">No hay recomendaciones adicionales con los datos actuales.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if "plan_accion" in contenido.secciones and contenido.plan_accion %}
+<section>
+  <h2 class="ps-seccion-titulo">Plan de acción</h2>
+  <div class="dm-tabla-scroll">
+    <table class="dm-tabla-kpi">
+      <thead><tr><th>Prioridad</th><th>Acción</th><th>Motivo</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+        {% for p in contenido.plan_accion %}
+        <tr>
+          <td><span class="opt-badge-prioridad opt-badge-prioridad-{{ p.prioridad }}">{{ p.prioridad_etiqueta }}</span></td>
+          <td>{{ p.accion }}</td>
+          <td>{{ p.motivo }}</td>
+          <td>{{ p.responsable }}</td>
+          <td>{{ p.estado }}</td>
+          <td>{% if p.entidad_id %}<a href="{{ url_for('datos_meta.acciones_lista', entidad_id=p.entidad_id, motivo=p.motivo) }}" class="boton-enlace">Preparar acción</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if "graficos" in contenido.secciones %}
+<section>
+  <h2 class="ps-seccion-titulo">Gráficos</h2>
+  <div id="inf-graficos" class="dm-graficos-grid"></div>
+</section>
+<script>
+  window.INF_DATOS = {{ contenido | tojson }};
+</script>
+{% endif %}
+
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/datos_meta_informes.js') }}"></script>
+{% endblock %}

@@ -11,7 +11,7 @@ los templates.
 
 import datetime
 
-from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, abort, jsonify, redirect, render_template, request, session, url_for
 
 from app.core.auth import obtener_usuario_actual
 from app.core.decorators import login_required
@@ -73,6 +73,14 @@ from app.services.meta.centro_control import (
     KPIS_TARJETAS_PRINCIPALES,
     construir_centro_control,
 )
+from app.services.meta.informes import (
+    SECCIONES_MODO_CLIENTE,
+    TITULOS_TIPO,
+    contenido_para_modo,
+    crear_informe,
+    listar_informes_empresa,
+    obtener_informe,
+)
 from app.services.meta.acciones import (
     aprobar_propuesta,
     cancelar_propuesta,
@@ -110,6 +118,9 @@ from app.models import (
     TIPOS_AUDIENCIA_ESTRATEGICA,
     ESTADOS_ACCION_META,
     TIPOS_ACCION_META,
+    TIPOS_INFORME_PAUTA,
+    TIPOS_COMPARACION_INFORME,
+    MODOS_INFORME_PAUTA,
 )
 
 datos_meta_bp = Blueprint("datos_meta", __name__, url_prefix="/datos-meta")
@@ -1796,6 +1807,183 @@ def chat_pauta():
         conversaciones=[_serializar_conversacion_chat(c) for c in listar_conversaciones_empresa(empresa.id)],
         conversacion_inicial_id=conversacion_inicial.id if conversacion_inicial else None,
         ia_configurada=ia_configurada(),
+    )
+
+
+# --- Informes ejecutivos de pauta (Paso 15) -------------------------------------------
+#
+# Reutiliza EXCLUSIVAMENTE app/services/meta/informes.py, que a su vez
+# reutiliza centro_control.py (Paso 14, que ya reutiliza optimizacion.py
+# del Paso 11) y analisis.py (Paso 5) -- ningun calculo de KPI ni
+# deteccion de oportunidades ocurre en este archivo. Cada informe se
+# persiste como un SNAPSHOT (InformePauta.contenido); volver a generar
+# el mismo informe (misma empresa/cuenta/tipo/fechas/comparacion/
+# filtros) crea una nueva version, nunca sobrescribe (ver
+# informes.py::_siguiente_version). El PDF se genera bajo demanda, no
+# se pre-genera ni se sube a Storage.
+
+ETIQUETAS_TIPO_INFORME = TITULOS_TIPO
+
+
+def _serializar_informe_resumen(informe):
+    return {
+        "id": informe.id,
+        "tipo": informe.tipo,
+        "titulo": informe.titulo,
+        "version": informe.version,
+        "periodo_clave": informe.periodo_clave,
+        "fecha_inicio": informe.fecha_inicio.isoformat(),
+        "fecha_fin": informe.fecha_fin.isoformat(),
+        "estado": informe.estado,
+        "creado_en": informe.creado_en.isoformat(),
+        "cuenta_publicitaria": informe.cuenta_publicitaria.nombre or informe.cuenta_publicitaria.id_externo,
+    }
+
+
+@datos_meta_bp.get("/informes")
+@login_required
+def informes_lista():
+    empresa, _rol = _empresa_activa_o_404()
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+    cuenta_id = request.args.get("cuenta_id", type=int)
+    tipo_filtro = request.args.get("tipo")
+    if tipo_filtro not in TIPOS_INFORME_PAUTA:
+        tipo_filtro = None
+
+    informes = listar_informes_empresa(empresa.id, cuenta_id=cuenta_id, tipo=tipo_filtro)
+
+    return render_template(
+        "datos_meta/informes_lista.html",
+        empresa_activa=empresa,
+        cuentas=cuentas,
+        cuenta_id=cuenta_id,
+        tipo_filtro=tipo_filtro,
+        tipos_informe=TIPOS_INFORME_PAUTA,
+        etiquetas_tipo=ETIQUETAS_TIPO_INFORME,
+        informes=informes,
+    )
+
+
+@datos_meta_bp.get("/informes/nuevo")
+@login_required
+def informes_nuevo():
+    empresa, _rol = _empresa_activa_o_404()
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+    cuenta_id = request.args.get("cuenta_id", type=int)
+
+    campanas = listar_campanas_de_cuenta(empresa.id, cuenta_id) if cuenta_id else []
+    objetivos = sorted({(c.atributos or {}).get("objetivo") for c in campanas if (c.atributos or {}).get("objetivo")})
+
+    from app.services.meta.cuentas_service import listar_conjuntos_de_empresa
+    from app.services.ia import ia_configurada
+
+    audiencias = listar_conjuntos_de_empresa(empresa.id, cuenta_id=cuenta_id) if cuenta_id else []
+
+    return render_template(
+        "datos_meta/informes_nuevo.html",
+        empresa_activa=empresa,
+        cuentas=cuentas,
+        cuenta_id=cuenta_id,
+        campanas=campanas,
+        objetivos=objetivos,
+        audiencias=audiencias,
+        tipos_informe=TIPOS_INFORME_PAUTA,
+        etiquetas_tipo=ETIQUETAS_TIPO_INFORME,
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+        etiquetas_comparacion=ETIQUETAS_COMPARACION,
+        ia_configurada=ia_configurada(),
+    )
+
+
+@datos_meta_bp.post("/informes/crear")
+@login_required
+def informes_crear():
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+    datos = request.get_json(silent=True) or {}
+
+    periodo_clave = datos.get("periodo") or "ultimos_30_dias"
+    if periodo_clave not in PERIODOS_PREDEFINIDOS:
+        return jsonify({"ok": False, "error": "Período inválido."}), 400
+
+    try:
+        if periodo_clave == "personalizado":
+            fecha_inicio = datetime.date.fromisoformat(datos["fecha_inicio"])
+            fecha_fin = datetime.date.fromisoformat(datos["fecha_fin"])
+        else:
+            fecha_inicio, fecha_fin = resolver_periodo(periodo_clave)
+    except (ValueError, KeyError, TypeError) as exc:
+        return jsonify({"ok": False, "error": f"Período inválido: {exc}"}), 400
+
+    filtros = {
+        "campana_ids": datos.get("campana_ids"),
+        "audiencia_ids": datos.get("audiencia_ids"),
+        "objetivo": datos.get("objetivo"),
+    }
+
+    informe, error = crear_informe(
+        empresa, usuario["id"], datos.get("cuenta_id"), datos.get("tipo"), periodo_clave, fecha_inicio, fecha_fin,
+        tipo_comparacion=datos.get("tipo_comparacion") or "periodo_anterior",
+        filtros=filtros, generar_resumen_claude=bool(datos.get("generar_resumen_claude")),
+    )
+    if informe is None:
+        return jsonify({"ok": False, "error": error}), 400
+
+    return jsonify({"ok": True, "informe_id": informe.id, "version": informe.version, "estado": informe.estado}), 201
+
+
+def _informe_o_404(empresa_id, informe_id):
+    informe = obtener_informe(empresa_id, informe_id)
+    if informe is None:
+        abort(404)
+    return informe
+
+
+@datos_meta_bp.get("/informes/<int:informe_id>")
+@login_required
+def informes_detalle(informe_id):
+    empresa, _rol = _empresa_activa_o_404()
+    informe = _informe_o_404(empresa.id, informe_id)
+
+    modo = request.args.get("modo") or "interno"
+    if modo not in MODOS_INFORME_PAUTA:
+        modo = "interno"
+
+    contenido = contenido_para_modo(informe.contenido, modo) if informe.contenido else None
+
+    return render_template(
+        "datos_meta/informes_detalle.html",
+        empresa_activa=empresa,
+        informe=informe,
+        contenido=contenido,
+        modo=modo,
+        modos=MODOS_INFORME_PAUTA,
+    )
+
+
+@datos_meta_bp.get("/informes/<int:informe_id>/descargar")
+@login_required
+def informes_descargar_pdf(informe_id):
+    empresa, _rol = _empresa_activa_o_404()
+    informe = _informe_o_404(empresa.id, informe_id)
+
+    if informe.contenido is None:
+        abort(404, f"Este informe no tiene contenido generado (estado: {informe.estado}).")
+
+    modo = request.args.get("modo") or "interno"
+    if modo not in MODOS_INFORME_PAUTA:
+        modo = "interno"
+
+    from app.services.meta.informes_pdf import generar_pdf
+
+    contenido = contenido_para_modo(informe.contenido, modo)
+    pdf_bytes = generar_pdf(informe, contenido, empresa.nombre, modo=modo)
+
+    nombre_archivo = f"informe-{informe.tipo}-v{informe.version}-{informe.fecha_inicio.isoformat()}.pdf"
+    return Response(
+        pdf_bytes, mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'},
     )
 
 

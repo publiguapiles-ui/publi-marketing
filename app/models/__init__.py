@@ -48,6 +48,13 @@ from app.models.proyecto_estrategico import (
 )
 from app.models.conversacion_ia import ConversacionIA, MensajeIA, ROLES_MENSAJE_IA
 from app.models.accion_meta import AccionMeta, ESTADOS_ACCION_META, TIPOS_ACCION_META, ORIGENES_ACCION_META
+from app.models.informe_pauta import (
+    InformePauta,
+    TIPOS_INFORME_PAUTA,
+    TIPOS_COMPARACION_INFORME,
+    ESTADOS_INFORME_PAUTA,
+    MODOS_INFORME_PAUTA,
+)
 
 __all__ = [
     "Usuario",
@@ -107,4 +114,9 @@ __all__ = [
     "ESTADOS_ACCION_META",
     "TIPOS_ACCION_META",
     "ORIGENES_ACCION_META",
+    "InformePauta",
+    "TIPOS_INFORME_PAUTA",
+    "TIPOS_COMPARACION_INFORME",
+    "ESTADOS_INFORME_PAUTA",
+    "MODOS_INFORME_PAUTA",
 ]
