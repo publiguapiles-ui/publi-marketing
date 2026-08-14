@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block titulo %}Inteligencia · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Inteligencia — diagnóstico, oportunidades y alertas calculados con reglas y datos verificables. Sin Claude ni ninguna IA generativa: cada conclusión muestra el dato real que la respalda.</p>
+  </div>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+</div>
+
+<form id="dm-filtros" class="formulario-simple dm-form-kpi" method="get">
+  <label>
+    Cuenta publicitaria
+    <select name="cuenta_id" id="dm-filtro-cuenta">
+      <option value="">Toda la empresa</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}" {% if cuenta_id == cuenta.id %}selected{% endif %}>{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Período
+    <select name="periodo" id="dm-filtro-periodo">
+      {% for p in periodos %}
+      <option value="{{ p }}" {% if p == periodo_clave %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="dm-campo-periodo" id="dm-filtro-personalizado" {% if periodo_clave != "personalizado" %}hidden{% endif %}>
+    <label>Desde <input type="date" name="fecha_inicio" id="dm-filtro-fecha-inicio" /></label>
+    <label>Hasta <input type="date" name="fecha_fin" id="dm-filtro-fecha-fin" /></label>
+  </div>
+  <button type="submit" class="boton-primario">Aplicar filtros</button>
+</form>
+
+<div id="dm-mensaje-error" class="estado-vacio" {% if not error %}hidden{% endif %}>{{ error or "" }}</div>
+
+<section>
+  <h2 class="ps-seccion-titulo">Diagnóstico de cuenta</h2>
+  <p class="perfil-nota">Cada área se clasifica comparando el período seleccionado contra el período anterior equivalente. Los umbrales (15% = Atención, 35% = Crítico) son una heurística propia, documentada, no un valor que Meta reporte.</p>
+  <div id="dm-diagnostico"></div>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Oportunidades estratégicas</h2>
+  <div id="dm-oportunidades-estrategicas"></div>
+</section>
+
+<section>
+  <h2 class="ps-seccion-titulo">Alertas</h2>
+  <div id="dm-alertas"></div>
+</section>
+
+<script>
+  window.DM_INTELIGENCIA_INICIAL = {{ datos | tojson }};
+  window.DM_INTELIGENCIA_DATOS_URL = "{{ url_for('datos_meta.inteligencia_datos') }}";
+  window.DM_INTELIGENCIA_URL = "{{ url_for('datos_meta.inteligencia') }}";
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_inteligencia.js') }}"></script>
+{% endblock %}

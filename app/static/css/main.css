@@ -315,6 +315,42 @@ body {
 .estado-badge-expirada,
 .estado-badge-revocada { background: #f3f4f6; color: #6b7280; }
 
+/* Diagnostico de cuenta (Paso 8): BUENO/ATENCION/CRITICO/SIN_DATOS */
+.estado-badge-bueno { background: #dcfce7; color: #166534; }
+.estado-badge-atencion { background: #fef3c7; color: #92400e; }
+.estado-badge-critico { background: #fee2e2; color: #991b1b; }
+.estado-badge-sin_datos { background: #f3f4f6; color: #6b7280; }
+
+/* Nivel de confianza (Paso 8) */
+.dm-confianza {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid currentColor;
+}
+.dm-confianza-alta { color: #166534; }
+.dm-confianza-media { color: #92400e; }
+.dm-confianza-baja { color: #6b7280; }
+
+/* Alertas (Paso 8) -- misma estructura visual que dm-oportunidad,
+   pero con su propia clase para no confundirlas en el DOM. */
+.dm-alerta {
+  border-left: 4px solid #9ca3af;
+  border-radius: 6px;
+  background: #fafafa;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.dm-alerta p { margin: 4px 0 0; font-size: 14px; color: #374151; }
+.dm-alerta-cabecera { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.dm-alerta-medio,
+.dm-alerta-atencion { border-left-color: #f59e0b; }
+.dm-alerta-alto,
+.dm-alerta-critico { border-left-color: #dc2626; }
+
 .pagina-login {
   display: flex;
   align-items: center;

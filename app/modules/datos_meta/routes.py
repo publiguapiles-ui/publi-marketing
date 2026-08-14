@@ -65,6 +65,7 @@ from app.services.meta.planificador import (
     listar_proyectos_empresa,
     obtener_proyecto,
 )
+from app.services.meta.inteligencia import construir_inteligencia
 from app.services.periodos import ETIQUETAS_PERIODOS, PERIODOS_PREDEFINIDOS, resolver_periodo
 from app.services.presupuestos import (
     calcular_resumen_presupuesto,
@@ -1003,3 +1004,104 @@ def planificador_eliminar_etapa(proyecto_id, etapa_id):
     if not ok:
         return jsonify({"ok": False, "error": error}), 400
     return jsonify({"ok": True})
+
+
+# --- Motor de inteligencia estrategica (Paso 8) ------------------------------------
+#
+# Reutiliza exclusivamente app/services/meta/inteligencia.py, que a su
+# vez reutiliza kpi.py (Paso 3), analisis.py/oportunidades.py/
+# targeting.py (Paso 5) y presupuestos.py (Paso 2) -- ningun calculo de
+# KPI nuevo ocurre en este archivo. SIN Claude/IA generativa: todo lo
+# que se muestra viene de reglas y datos verificables.
+
+def _serializar_diagnostico(diagnostico):
+    return {
+        "kpis": diagnostico["kpis"],
+        "areas": diagnostico["areas"],
+        "comparacion_periodos": _serializar_comparacion(diagnostico["comparacion_periodos"]),
+        "dias_con_datos": diagnostico["dias_con_datos"],
+        "cantidad_campanas": diagnostico["cantidad_campanas"],
+    }
+
+
+def _serializar_analisis_campanas_inteligencia(analisis):
+    return {
+        "campanas": [_serializar_fila_kpi(f) for f in analisis["campanas"]],
+        "oportunidades": analisis["oportunidades"],
+        "cambios_temporales": analisis["cambios_temporales"],
+    }
+
+
+def _serializar_analisis_creativos(analisis):
+    return {
+        "anuncios": [_serializar_fila_kpi(f, incluir_creativo=True) for f in analisis["anuncios"]],
+        "patron_video": analisis["patron_video"],
+    }
+
+
+def _serializar_analisis_presupuesto_inteligencia(analisis):
+    return {
+        "presupuestos": [_serializar_resumen_presupuesto(r) for r in analisis["presupuestos"]],
+        "concentracion": analisis["concentracion"],
+    }
+
+
+def _serializar_inteligencia(paquete, cuenta_id, periodo):
+    return {
+        "cuenta_id": cuenta_id,
+        "diagnostico": _serializar_diagnostico(paquete["diagnostico"]),
+        "campanas": _serializar_analisis_campanas_inteligencia(paquete["campanas"]),
+        "audiencias": {
+            "segmentos": [_serializar_fila_kpi(f, incluir_targeting=True) for f in paquete["audiencias"]["segmentos"]] if paquete["audiencias"] else [],
+            "oportunidades": paquete["audiencias"]["oportunidades"] if paquete["audiencias"] else [],
+        },
+        "creativos": _serializar_analisis_creativos(paquete["creativos"]),
+        "presupuesto": _serializar_analisis_presupuesto_inteligencia(paquete["presupuesto"]),
+        "oportunidades": paquete["oportunidades"],
+        "alertas": paquete["alertas"],
+        "filtros": {
+            "periodo": periodo["periodo_clave"],
+            "fecha_inicio": periodo["fecha_inicio"].isoformat(),
+            "fecha_fin": periodo["fecha_fin"].isoformat(),
+        },
+        "claves_kpi": CLAVES_KPI,
+        "etiquetas_kpi": ETIQUETAS_KPI,
+    }
+
+
+@datos_meta_bp.get("/inteligencia")
+@login_required
+def inteligencia():
+    empresa, _rol = _empresa_activa_o_404()
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+    cuenta_id = request.args.get("cuenta_id", type=int)
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    paquete, error = construir_inteligencia(empresa.id, cuenta_id, periodo["fecha_inicio"], periodo["fecha_fin"])
+    if error:
+        return render_template("datos_meta/inteligencia.html", empresa_activa=empresa, cuentas=cuentas, cuenta_id=cuenta_id, error=error, datos=None, periodos=PERIODOS_PREDEFINIDOS, etiquetas_periodos=ETIQUETAS_PERIODOS, periodo_clave=periodo["periodo_clave"])
+
+    return render_template(
+        "datos_meta/inteligencia.html",
+        empresa_activa=empresa,
+        cuentas=cuentas,
+        cuenta_id=cuenta_id,
+        error=None,
+        datos=_serializar_inteligencia(paquete, cuenta_id, periodo),
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+        periodo_clave=periodo["periodo_clave"],
+    )
+
+
+@datos_meta_bp.get("/inteligencia/datos")
+@login_required
+def inteligencia_datos():
+    empresa, _rol = _empresa_activa_o_404()
+    cuenta_id = request.args.get("cuenta_id", type=int)
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    paquete, error = construir_inteligencia(empresa.id, cuenta_id, periodo["fecha_inicio"], periodo["fecha_fin"])
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, **_serializar_inteligencia(paquete, cuenta_id, periodo)})
