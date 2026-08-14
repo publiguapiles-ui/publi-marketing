@@ -1668,6 +1668,15 @@ body {
   font-weight: 600;
 }
 
+.dm-badge-neutro {
+  background: #f3f4f6;
+  color: #4b5563;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 /* --- Paso 5: oportunidades detectadas ----------------------------------------- */
 
 .dm-lista-oportunidades {
@@ -1891,5 +1900,79 @@ body {
   }
   .ia-panel-chat {
     height: 60vh;
+  }
+}
+
+/* Centro de optimizacion (Paso 11): recomendaciones explicables con prioridad. */
+
+.opt-lista-recomendaciones {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.opt-recomendacion {
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.opt-recomendacion-critico { border-left-color: #991b1b; }
+.opt-recomendacion-alto { border-left-color: #dc2626; }
+.opt-recomendacion-medio { border-left-color: #f59e0b; }
+.opt-recomendacion-bajo { border-left-color: #9ca3af; }
+.opt-recomendacion-informativo { border-left-color: #93c5fd; }
+
+.opt-recomendacion-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.opt-badge-prioridad {
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.opt-badge-prioridad-critico { background: #7f1d1d; color: #fff; }
+.opt-badge-prioridad-alto { background: #fee2e2; color: #991b1b; }
+.opt-badge-prioridad-medio { background: #fef3c7; color: #92400e; }
+.opt-badge-prioridad-bajo { background: #f3f4f6; color: #4b5563; }
+.opt-badge-prioridad-informativo { background: #dbeafe; color: #1e40af; }
+
+.opt-recomendacion-detalle {
+  margin: 0;
+}
+
+.opt-recomendacion-detalle dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b7280;
+  margin-top: 8px;
+}
+
+.opt-recomendacion-detalle dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+
+.opt-recomendacion-acciones {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .opt-recomendacion-cabecera {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

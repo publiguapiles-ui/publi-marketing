@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block titulo %}Optimización · Datos de Meta{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Datos de Meta</h1>
+    <p class="perfil-nota">Optimización — compara, detecta señales y prioriza qué revisar primero, con la evidencia real detrás de cada recomendación. Nunca modifica ni ejecuta nada en Meta.</p>
+  </div>
+  <div>
+    {% if seleccion.cuenta_id %}
+    <a href="{{ url_for('estratega_ia.index', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-primario">Solicitar análisis de Claude</a>
+    {% endif %}
+    <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
+  </div>
+</div>
+
+<form method="get" id="opt-filtros" class="formulario-simple dm-form-kpi">
+  <label>
+    Cuenta publicitaria
+    <select name="cuenta_id" id="opt-cuenta">
+      <option value="">Selecciona una cuenta</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}" {% if seleccion.cuenta_id == cuenta.id %}selected{% endif %}>{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Período
+    <select name="periodo" id="opt-periodo">
+      {% for p in periodos %}
+      {% if p != "personalizado" %}
+      <option value="{{ p }}" {% if p == periodo_clave %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Campaña
+    <select name="campana_id" id="opt-campana" {% if not campanas %}disabled{% endif %}>
+      <option value="">Todas — comparar campañas entre sí</option>
+      {% for c in campanas %}
+      <option value="{{ c.id }}" {% if seleccion.campana_id == c.id %}selected{% endif %}>{{ c.nombre or c.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Conjunto de anuncios
+    <select name="conjunto_id" id="opt-conjunto" {% if not conjuntos %}disabled{% endif %}>
+      <option value="">Todos — comparar conjuntos entre sí</option>
+      {% for c in conjuntos %}
+      <option value="{{ c.id }}" {% if seleccion.conjunto_id == c.id %}selected{% endif %}>{{ c.nombre or c.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="boton-primario">Aplicar</button>
+</form>
+
+{% if error %}
+<div class="estado-vacio"><p>{{ error }}</p></div>
+{% elif not seleccion.cuenta_id %}
+<div class="estado-vacio"><p>Selecciona una cuenta publicitaria para ver el centro de optimización.</p></div>
+{% else %}
+
+<h2 class="ps-seccion-titulo">
+  {% if datos.nivel == "cuenta" %}Comparación de campañas{% elif datos.nivel == "campana" %}Comparación de conjuntos{% else %}Comparación de anuncios{% endif %}
+</h2>
+{% if datos.comparacion %}
+<div class="dm-tabla-scroll">
+<table class="dm-tabla-kpi" id="opt-tabla-comparacion">
+  <thead>
+    <tr>
+      <th></th><th>Nombre</th><th>Gasto</th><th>Resultados</th><th>Costo por resultado</th><th>CTR</th><th>Veredicto</th><th>Vs. período anterior</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for fila in datos.comparacion %}
+    <tr>
+      <td><input type="checkbox" class="opt-check-comparar" data-nombre="{{ fila.nombre }}" data-costo="{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else '' }}" /></td>
+      <td>{{ fila.nombre }}</td>
+      <td>{{ fila.kpis.spend if fila.kpis.spend is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.resultados if fila.kpis.resultados is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+      <td>{{ fila.kpis.ctr ~ "%" if fila.kpis.ctr is not none else "No disponible" }}</td>
+      <td>
+        {% if fila.es_mejor %}<span class="dm-badge-mejor">Mejor</span>{% endif %}
+        {% if fila.es_peor %}<span class="dm-badge-peor">Peor</span>{% endif %}
+      </td>
+      <td>
+        {% if fila.veredicto_temporal == "mejora_significativa" %}<span class="dm-badge-mejor">Cambió — mejoró</span>
+        {% elif fila.veredicto_temporal == "deterioro" %}<span class="dm-badge-peor">Cambió — empeoró</span>
+        {% else %}<span class="dm-badge-neutro">Sin cambio significativo</span>{% endif %}
+      </td>
+      <td>
+        {% if datos.nivel == "cuenta" %}
+        <a href="{{ url_for('datos_meta.campana_detalle', campana_id=fila.id) }}" class="boton-enlace">Ver detalles</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="perfil-nota">
+  Selecciona dos filas para comparar:
+  <button type="button" class="boton-enlace" id="opt-boton-comparar">Comparar seleccionadas</button>
+</p>
+<p id="opt-resultado-comparar" class="perfil-nota" hidden></p>
+{% else %}
+<p class="perfil-nota">No hay entidades sincronizadas para comparar en este nivel y período.</p>
+{% endif %}
+
+<h2 class="ps-seccion-titulo">Recomendaciones priorizadas</h2>
+<p class="perfil-nota">Cada recomendación muestra qué pasó, por qué importa, la evidencia real, qué se recomienda y el riesgo/confianza detrás. Nunca se ejecuta nada automáticamente en Meta.</p>
+{% if datos.recomendaciones %}
+<div class="opt-lista-recomendaciones">
+  {% for r in datos.recomendaciones %}
+  <div class="opt-recomendacion opt-recomendacion-{{ r.prioridad }}">
+    <div class="opt-recomendacion-cabecera">
+      <span class="opt-badge-prioridad opt-badge-prioridad-{{ r.prioridad }}">{{ r.prioridad.upper() }}</span>
+      <strong>{{ r.entidad_nombre }}</strong>
+    </div>
+    <dl class="opt-recomendacion-detalle">
+      <dt>Qué pasó</dt><dd>{{ r.que_paso }}</dd>
+      {% if r.por_que_importa %}<dt>Por qué importa</dt><dd>{{ r.por_que_importa }}</dd>{% endif %}
+      <dt>Evidencia</dt><dd>{{ r.evidencia }}</dd>
+      <dt>Recomendación</dt><dd>{{ r.recomendacion }}</dd>
+      <dt>Riesgo</dt><dd>{{ r.riesgo }}</dd>
+    </dl>
+    <div class="opt-recomendacion-acciones">
+      {% if seleccion.cuenta_id %}
+      <a href="{{ url_for('estratega_ia.index', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Solicitar análisis de Claude</a>
+      {% endif %}
+      <a href="{{ url_for('datos_meta.proyectos_estrategicos_lista') }}" class="boton-enlace">Agregar al proyecto</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="perfil-nota">No se detectó ninguna señal que priorizar con los datos y umbrales actuales para este período.</p>
+{% endif %}
+
+{% if datos.nivel == "cuenta" and datos.presupuesto %}
+<h2 class="ps-seccion-titulo">Presupuesto</h2>
+{% if datos.presupuesto.presupuestos %}
+<div class="dm-tabla-scroll">
+<table class="dm-tabla-kpi">
+  <thead><tr><th>Presupuesto</th><th>Monto</th><th>Gasto real</th><th>% usado</th><th>Acción recomendada</th></tr></thead>
+  <tbody>
+    {% for r in datos.presupuesto.presupuestos %}
+    <tr>
+      <td>{{ r.nombre }}</td>
+      <td>{{ r.monto }} {{ r.moneda }}</td>
+      <td>{{ r.gasto_real }} {{ r.moneda }}</td>
+      <td>{{ r.porcentaje_usado }}%{% if r.porcentaje_usado is none %} —{% endif %}</td>
+      <td>{{ r.accion_recomendada or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="perfil-nota">Ningún presupuesto de pauta definido todavía.</p>
+{% endif %}
+{% if datos.ritmo_presupuestos %}
+{% for rp in datos.ritmo_presupuestos %}
+<div class="dm-alerta dm-alerta-atencion">
+  <p>{{ rp.mensaje }}</p>
+</div>
+{% endfor %}
+{% endif %}
+{% endif %}
+
+<script>
+  window.DM_OPTIMIZACION_CUENTA_ID = {{ seleccion.cuenta_id | tojson }};
+</script>
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/datos_meta_optimizacion.js') }}"></script>
+{% endblock %}

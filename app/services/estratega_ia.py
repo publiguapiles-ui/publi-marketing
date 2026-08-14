@@ -47,6 +47,7 @@ REGLAS OBLIGATORIAS:
 5. Nunca afirmes que una acción garantiza un resultado futuro.
 6. Cuando propongas una estrategia o distribución de presupuesto, preséntala como una PROPUESTA estructurada (objetivo, audiencia, presupuesto sugerido, duración, contenido, KPI, motivo) -- nunca la ejecutes ni des a entender que ya se aplicó. No puedes crear, modificar ni publicar nada en Meta bajo ninguna circunstancia; solo puedes proponer.
 7. Si el contexto indica que no hay datos suficientes para un análisis, dilo con claridad en vez de rellenar con suposiciones.
+8. Si el usuario pregunta qué debería optimizar u ordenar por prioridad, usa la lista "PRIORIDADES DEL CENTRO DE OPTIMIZACIÓN" del contexto (ya viene ordenada) en vez de inventar un orden propio -- respétala como base de tu respuesta.
 
 CONTEXTO DISPONIBLE (datos reales, ya sincronizados en Publi Marketing):
 {contexto}
@@ -156,6 +157,15 @@ def construir_contexto(empresa, cuenta_publicitaria_id=None, periodo_clave="ulti
         if error:
             return None, None, error
         fuente = "inteligencia"
+
+        # Paso 11: las prioridades del centro de optimizacion se
+        # agregan al MISMO informe (nunca se vuelve a analizar nada,
+        # solo se reutiliza construir_prioridades_para_claude) para que
+        # el Estratega IA pueda responder "que deberia optimizar hoy".
+        from app.services.meta.optimizacion import construir_prioridades_para_claude
+
+        prioridades, _error_prioridades = construir_prioridades_para_claude(empresa.id, cuenta_publicitaria_id, fecha_inicio, fecha_fin)
+        informe["prioridades_optimizacion"] = prioridades
 
     resumen_auditoria = _resumen_auditoria(informe, fuente, periodo_clave, fecha_inicio, fecha_fin, proyecto, empresa)
     return informe, resumen_auditoria, None
@@ -293,6 +303,12 @@ def _formatear_contexto_para_prompt(informe, fuente, proyecto=None):
             partes.append(f"  - {a.get('que_ocurrio')}")
     else:
         partes.append("  (ninguna)")
+
+    prioridades_optimizacion = informe.get("prioridades_optimizacion") or []
+    if prioridades_optimizacion:
+        partes.append(f"\nPRIORIDADES DEL CENTRO DE OPTIMIZACIÓN (Paso 11, ya ordenadas de mayor a menor prioridad -- úsalas para responder qué revisar primero):")
+        for linea in prioridades_optimizacion:
+            partes.append(f"  - {linea}")
 
     if seguimiento and seguimiento.get("tiene_cuenta_vinculada"):
         partes.append("\nSEGUIMIENTO PLANIFICADO VS. REAL:")

@@ -66,6 +66,7 @@ from app.services.meta.planificador import (
     obtener_proyecto,
 )
 from app.services.meta.inteligencia import construir_inteligencia
+from app.services.meta.optimizacion import construir_centro_optimizacion
 from app.services.meta.proyectos_estrategicos import (
     agregar_fase,
     agregar_paso_secuencia,
@@ -496,6 +497,7 @@ def _serializar_resumen_presupuesto(r):
         "disponible": r["disponible"],
         "porcentaje_usado": r["porcentaje_usado"],
         "excedido": r["excedido"],
+        "accion_recomendada": r.get("accion_recomendada"),
     }
 
 
@@ -1354,3 +1356,122 @@ def proyectos_estrategicos_eliminar_secuencia(proyecto_id, paso_id):
     if not ok:
         return jsonify({"ok": False, "error": error}), 400
     return jsonify({"ok": True})
+
+
+# --- Centro de optimizacion de pauta (Paso 11) -------------------------------------
+#
+# Reutiliza exclusivamente app/services/meta/optimizacion.py, que a su
+# vez reutiliza kpi.py (Paso 3), oportunidades.py (Paso 5) e
+# inteligencia.py (Paso 8) -- ningun calculo de KPI ni de oportunidades
+# ocurre en este archivo. NUNCA modifica nada en Meta: solo lee y
+# compara datos ya sincronizados.
+
+def _serializar_fila_comparacion_optimizacion(fila):
+    return {**_serializar_fila_kpi(fila), "veredicto_temporal": fila.get("veredicto_temporal")}
+
+
+def _serializar_centro_optimizacion(paquete):
+    return {
+        "nivel": paquete["nivel"],
+        "cuenta_id": paquete["cuenta_id"],
+        "campana_id": paquete["campana_id"],
+        "conjunto_id": paquete["conjunto_id"],
+        "moneda": paquete["moneda"],
+        "comparacion": [_serializar_fila_comparacion_optimizacion(f) for f in paquete["comparacion"]],
+        "oportunidades": paquete["oportunidades"],
+        "cambios_temporales": paquete["cambios_temporales"],
+        "fatiga": paquete["fatiga"],
+        "recomendaciones": paquete["recomendaciones"],
+        "diagnostico": _serializar_diagnostico(paquete["diagnostico_cuenta"]) if paquete["diagnostico_cuenta"] else None,
+        "presupuesto": {
+            "presupuestos": [_serializar_resumen_presupuesto(r) for r in paquete["analisis_presupuesto"]["presupuestos"]],
+            "concentracion": paquete["analisis_presupuesto"]["concentracion"],
+        } if paquete["analisis_presupuesto"] else None,
+        "ritmo_presupuestos": paquete["ritmo_presupuestos"],
+        "claves_kpi": CLAVES_KPI,
+        "etiquetas_kpi": ETIQUETAS_KPI,
+    }
+
+
+def _leer_seleccion_optimizacion(args):
+    return {
+        "cuenta_id": args.get("cuenta_id", type=int),
+        "campana_id": args.get("campana_id", type=int),
+        "conjunto_id": args.get("conjunto_id", type=int),
+    }
+
+
+@datos_meta_bp.get("/optimizacion")
+@login_required
+def optimizacion():
+    empresa, _rol = _empresa_activa_o_404()
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+    seleccion = _leer_seleccion_optimizacion(request.args)
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    campanas = listar_campanas_de_cuenta(empresa.id, seleccion["cuenta_id"]) if seleccion["cuenta_id"] else []
+    conjuntos = []
+    if seleccion["campana_id"]:
+        from app.services.meta.cuentas_service import listar_conjuntos_de_campana
+
+        conjuntos = listar_conjuntos_de_campana(empresa.id, seleccion["campana_id"])
+
+    datos = None
+    error = None
+    if seleccion["cuenta_id"] is not None:
+        paquete, error = construir_centro_optimizacion(
+            empresa.id, seleccion["cuenta_id"], periodo["fecha_inicio"], periodo["fecha_fin"],
+            campana_id=seleccion["campana_id"], conjunto_id=seleccion["conjunto_id"],
+        )
+        if paquete:
+            datos = _serializar_centro_optimizacion(paquete)
+
+    return render_template(
+        "datos_meta/optimizacion.html",
+        empresa_activa=empresa,
+        cuentas=cuentas,
+        campanas=campanas,
+        conjuntos=conjuntos,
+        seleccion=seleccion,
+        datos=datos,
+        error=error,
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+        periodo_clave=periodo["periodo_clave"],
+    )
+
+
+@datos_meta_bp.get("/optimizacion/datos")
+@login_required
+def optimizacion_datos():
+    empresa, _rol = _empresa_activa_o_404()
+    seleccion = _leer_seleccion_optimizacion(request.args)
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    if seleccion["cuenta_id"] is None:
+        return jsonify({"ok": False, "error": "Selecciona una cuenta publicitaria."}), 400
+
+    paquete, error = construir_centro_optimizacion(
+        empresa.id, seleccion["cuenta_id"], periodo["fecha_inicio"], periodo["fecha_fin"],
+        campana_id=seleccion["campana_id"], conjunto_id=seleccion["conjunto_id"],
+    )
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, **_serializar_centro_optimizacion(paquete)})
+
+
+@datos_meta_bp.get("/optimizacion/conjuntos")
+@login_required
+def optimizacion_conjuntos():
+    """Conjuntos de una campaña, para el selector en cascada del
+    centro de optimizacion (Paso 11, punto 1) -- lectura pura, sin
+    llamar a Meta."""
+    empresa, _rol = _empresa_activa_o_404()
+    campana_id = request.args.get("campana_id", type=int)
+    if campana_id is None:
+        return jsonify({"ok": False, "error": "Falta campana_id."}), 400
+
+    from app.services.meta.cuentas_service import listar_conjuntos_de_campana
+
+    conjuntos = listar_conjuntos_de_campana(empresa.id, campana_id)
+    return jsonify({"ok": True, "conjuntos": [{"id": c.id, "nombre": c.nombre or c.id_externo} for c in conjuntos]})
