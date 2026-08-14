@@ -33,7 +33,14 @@ limitacion es inherente a cualquier reporte que agregue reach, no solo
 a este motor.
 """
 
-from app.services.periodos import periodo_anterior_equivalente
+from app.services.periodos import periodo_anterior_equivalente, periodo_mismo_rango_anio_anterior
+
+# Opciones validas de `tipo_comparacion` para comparar_periodos() (Paso
+# 14, punto 12): que rango anterior se usa como referencia. El valor
+# por defecto ("periodo_anterior") preserva el comportamiento de todos
+# los pasos anteriores que ya llaman comparar_periodos() sin este
+# parametro.
+TIPOS_COMPARACION_PERIODO = ["periodo_anterior", "mismo_periodo_anio_anterior"]
 
 # Metricas que se suman entre filas/entidades (conteos y montos reales
 # que Meta reporto, nunca ratios).
@@ -255,13 +262,23 @@ def calcular_variacion_porcentual(valor_anterior, valor_actual):
     return round((valor_actual - valor_anterior) / abs(valor_anterior) * 100, 2)
 
 
-def comparar_periodos(empresa_id, entidad_ids, fecha_inicio, fecha_fin):
-    """KPI del periodo solicitado + KPI del periodo anterior
-    equivalente (misma duracion, ver periodos.py) + variacion
-    porcentual de cada clave. `entidad_ids=None` agrega toda la
-    empresa."""
+def comparar_periodos(empresa_id, entidad_ids, fecha_inicio, fecha_fin, tipo_comparacion="periodo_anterior"):
+    """KPI del periodo solicitado + KPI del periodo de referencia +
+    variacion porcentual de cada clave. `entidad_ids=None` agrega toda
+    la empresa. `tipo_comparacion` (Paso 14, punto 12):
+      - "periodo_anterior" (por defecto, igual que siempre): el rango
+        INMEDIATAMENTE anterior, misma duracion.
+      - "mismo_periodo_anio_anterior": el mismo rango de fechas, un año
+        antes -- para comparar contra estacionalidad en vez de contra
+        el periodo inmediato previo.
+    Un `tipo_comparacion` desconocido cae de vuelta a "periodo_anterior"
+    en vez de fallar, igual que el resto de los "valores por defecto
+    honestos" de este modulo."""
     actual = calcular_kpis(empresa_id, entidad_ids, fecha_inicio, fecha_fin)
-    inicio_anterior, fin_anterior = periodo_anterior_equivalente(fecha_inicio, fecha_fin)
+    if tipo_comparacion == "mismo_periodo_anio_anterior":
+        inicio_anterior, fin_anterior = periodo_mismo_rango_anio_anterior(fecha_inicio, fecha_fin)
+    else:
+        inicio_anterior, fin_anterior = periodo_anterior_equivalente(fecha_inicio, fecha_fin)
     anterior = calcular_kpis(empresa_id, entidad_ids, inicio_anterior, fin_anterior)
 
     variaciones = {clave: calcular_variacion_porcentual(anterior.get(clave), actual.get(clave)) for clave in actual}

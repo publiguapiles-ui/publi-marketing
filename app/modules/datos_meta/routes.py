@@ -67,6 +67,12 @@ from app.services.meta.planificador import (
 )
 from app.services.meta.inteligencia import construir_inteligencia
 from app.services.meta.optimizacion import construir_centro_optimizacion
+from app.services.meta.centro_control import (
+    EXPLICACIONES_KPI,
+    KPIS_MEJOR_PEOR_DISPONIBLES,
+    KPIS_TARJETAS_PRINCIPALES,
+    construir_centro_control,
+)
 from app.services.meta.acciones import (
     aprobar_propuesta,
     cancelar_propuesta,
@@ -1790,4 +1796,152 @@ def chat_pauta():
         conversaciones=[_serializar_conversacion_chat(c) for c in listar_conversaciones_empresa(empresa.id)],
         conversacion_inicial_id=conversacion_inicial.id if conversacion_inicial else None,
         ia_configurada=ia_configurada(),
+    )
+
+
+# --- Centro de Control de Pauta (Paso 14) -------------------------------------------
+#
+# Reutiliza EXCLUSIVAMENTE app/services/meta/centro_control.py, que a su
+# vez reutiliza optimizacion.py (Paso 11) en una unica llamada -- ningun
+# calculo de KPI ni deteccion de oportunidades ocurre en este archivo.
+# Mismo patron de seleccion que Optimizacion: requiere una cuenta
+# publicitaria elegida (se preselecciona sola si la empresa solo tiene
+# una vinculada).
+
+ETIQUETAS_COMPARACION = {
+    "periodo_anterior": "Período anterior",
+    "mismo_periodo_anio_anterior": "Mismo período (año anterior)",
+    "sin_comparacion": "Sin comparación",
+}
+
+
+def _serializar_mejor_peor(item):
+    if item is None:
+        return None
+    return {"id": item["entidad"].id, "nombre": item["entidad"].nombre or item["entidad"].id_externo, "valor": item["valor"]}
+
+
+def _serializar_centro_control(paquete):
+    mostrar_comparacion = paquete["tipo_comparacion"] != "sin_comparacion"
+    return {
+        "cuenta_id": paquete["cuenta_id"],
+        "moneda": paquete["moneda"],
+        "kpis": paquete["kpis"],
+        "comparacion_periodos": _serializar_comparacion(paquete["comparacion_periodos"]) if mostrar_comparacion else None,
+        "tipo_comparacion": paquete["tipo_comparacion"],
+        "serie_diaria": [{**d, "fecha": d["fecha"].isoformat()} for d in paquete["serie_diaria"]],
+        "estado_general": paquete["estado_general"],
+        "campanas": [_serializar_fila_comparacion_optimizacion(f) for f in paquete["campanas"]],
+        "kpi_mejor_peor": paquete["kpi_mejor_peor"],
+        "mejor": _serializar_mejor_peor(paquete["mejor"]),
+        "peor": _serializar_mejor_peor(paquete["peor"]),
+        "alertas": paquete["alertas"],
+        "oportunidades": paquete["oportunidades"],
+        "recomendacion_claude": paquete["recomendacion_claude"],
+        "presupuesto": {
+            "principal": _serializar_resumen_presupuesto(paquete["presupuesto"]["principal"]),
+            "ritmo": paquete["presupuesto"]["ritmo"],
+            "presupuesto_diario_meta": paquete["presupuesto"]["presupuesto_diario_meta"],
+            "todos": [_serializar_resumen_presupuesto(r) for r in paquete["presupuesto"]["todos"]],
+        },
+        "diagnostico": _serializar_diagnostico(paquete["diagnostico_cuenta"]) if paquete["diagnostico_cuenta"] else None,
+        "dias_con_datos": paquete["dias_con_datos"],
+        "claves_kpi": CLAVES_KPI,
+        "etiquetas_kpi": ETIQUETAS_KPI,
+        "explicaciones_kpi": EXPLICACIONES_KPI,
+        "kpis_tarjetas": KPIS_TARJETAS_PRINCIPALES,
+        "kpis_mejor_peor_disponibles": KPIS_MEJOR_PEOR_DISPONIBLES,
+    }
+
+
+def _construir_tarjetas_kpi_centro_control(datos):
+    """Precalcula, en Python, si cada KPI principal "mejoró" o "empeoró"
+    frente al período de referencia (Paso 14, punto 2: flecha de
+    tendencia + "Mejor/Peor que el período anterior") -- reutiliza
+    METRICAS_MENOR_ES_MEJOR de kpi.py (la MISMA regla que ya usa
+    comparar_entidades) en vez de repetir ese criterio en el template.
+    Solo incluye KPI con valor real disponible (nunca se muestra un KPI
+    en None, Paso 14 punto 2 "No mostrar KPI que no estén disponibles")."""
+    from app.services.meta.kpi import METRICAS_MENOR_ES_MEJOR
+
+    tarjetas = []
+    for clave in datos["kpis_tarjetas"]:
+        valor = datos["kpis"].get(clave)
+        if valor is None:
+            continue
+        variacion = None
+        anterior = None
+        es_mejora = None
+        if datos["comparacion_periodos"] is not None:
+            variacion = datos["comparacion_periodos"]["variacion_porcentual"].get(clave)
+            anterior = datos["comparacion_periodos"]["periodo_anterior"]["kpis"].get(clave)
+            if variacion is not None and variacion != 0:
+                menor_es_mejor = clave in METRICAS_MENOR_ES_MEJOR
+                es_mejora = (variacion < 0) if menor_es_mejor else (variacion > 0)
+        tarjetas.append({
+            "clave": clave,
+            "etiqueta": ETIQUETAS_KPI.get(clave, clave),
+            "valor": valor,
+            "anterior": anterior,
+            "variacion_pct": variacion,
+            "es_mejora": es_mejora,
+            "explicacion": datos["explicaciones_kpi"].get(clave),
+        })
+    return tarjetas
+
+
+def _leer_seleccion_centro_control(args):
+    tipo_comparacion = args.get("comparar_con") or "periodo_anterior"
+    if tipo_comparacion not in ETIQUETAS_COMPARACION:
+        tipo_comparacion = "periodo_anterior"
+    kpi_mejor_peor = args.get("kpi_mejor_peor") or "costo_por_resultado"
+    if kpi_mejor_peor not in KPIS_MEJOR_PEOR_DISPONIBLES:
+        kpi_mejor_peor = "costo_por_resultado"
+    return {"cuenta_id": args.get("cuenta_id", type=int), "tipo_comparacion": tipo_comparacion, "kpi_mejor_peor": kpi_mejor_peor}
+
+
+@datos_meta_bp.get("/centro-control")
+@login_required
+def centro_control():
+    empresa, _rol = _empresa_activa_o_404()
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+    seleccion = _leer_seleccion_centro_control(request.args)
+    periodo = _leer_periodo_y_comparar(request.args)
+
+    # Con una unica cuenta vinculada no hay ninguna eleccion real que
+    # hacer -- se preselecciona sola para que la pantalla "responda
+    # rapido" (Paso 14, objetivo) sin un clic extra obligatorio. Nunca
+    # se agregan datos de mas de una cuenta a la vez (ver
+    # centro_control.py): con varias cuentas, sigue pidiendo elegir una,
+    # igual que Optimizacion.
+    if seleccion["cuenta_id"] is None and len(cuentas) == 1:
+        seleccion["cuenta_id"] = cuentas[0].id
+
+    datos = None
+    error = None
+    if seleccion["cuenta_id"] is not None:
+        tipo_comparacion_para_calculo = "periodo_anterior" if seleccion["tipo_comparacion"] == "sin_comparacion" else seleccion["tipo_comparacion"]
+        paquete, error = construir_centro_control(
+            empresa.id, seleccion["cuenta_id"], periodo["fecha_inicio"], periodo["fecha_fin"],
+            tipo_comparacion=tipo_comparacion_para_calculo, kpi_mejor_peor=seleccion["kpi_mejor_peor"],
+        )
+        if paquete:
+            paquete["tipo_comparacion"] = seleccion["tipo_comparacion"]  # honra "sin_comparacion" al serializar
+            datos = _serializar_centro_control(paquete)
+            datos["tarjetas_kpi"] = _construir_tarjetas_kpi_centro_control(datos)
+
+    acciones_pendientes_total = len(listar_acciones_empresa(empresa.id, estado="pendiente_de_aprobacion"))
+
+    return render_template(
+        "datos_meta/centro_control.html",
+        empresa_activa=empresa,
+        cuentas=cuentas,
+        seleccion=seleccion,
+        datos=datos,
+        error=error,
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+        periodo_clave=periodo["periodo_clave"],
+        etiquetas_comparacion=ETIQUETAS_COMPARACION,
+        acciones_pendientes_total=acciones_pendientes_total,
     )

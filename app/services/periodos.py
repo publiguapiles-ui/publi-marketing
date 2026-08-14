@@ -71,3 +71,21 @@ def periodo_anterior_equivalente(fecha_inicio, fecha_fin):
     fin_anterior = fecha_inicio - timedelta(days=1)
     inicio_anterior = fin_anterior - timedelta(days=duracion - 1)
     return inicio_anterior, fin_anterior
+
+
+def _restar_un_anio(fecha):
+    """29 de febrero -> 28 de febrero del año no bisiesto anterior
+    (unico caso donde `date(dia=29)` no existe un año antes)."""
+    try:
+        return fecha.replace(year=fecha.year - 1)
+    except ValueError:
+        return fecha.replace(year=fecha.year - 1, day=28)
+
+
+def periodo_mismo_rango_anio_anterior(fecha_inicio, fecha_fin):
+    """Mismo rango de fechas, un año antes (Paso 14, punto 12: "mismo
+    período anterior") -- distinto de periodo_anterior_equivalente()
+    (el rango INMEDIATAMENTE anterior). Util para comparar contra
+    estacionalidad en vez de contra el mes/semana pasada. Pura
+    aritmética de fechas, no consulta nada."""
+    return _restar_un_anio(fecha_inicio), _restar_un_anio(fecha_fin)

@@ -145,6 +145,7 @@ def evaluar_ritmo_presupuesto(resumen_presupuesto, hoy=None):
     fecha_inicio = resumen_presupuesto.get("fecha_inicio")
     fecha_fin = resumen_presupuesto.get("fecha_fin")
     porcentaje_gasto = resumen_presupuesto.get("porcentaje_usado")
+    gasto_real = resumen_presupuesto.get("gasto_real")
     if not fecha_inicio or not fecha_fin or porcentaje_gasto is None:
         return None
 
@@ -155,11 +156,24 @@ def evaluar_ritmo_presupuesto(resumen_presupuesto, hoy=None):
     porcentaje_tiempo = round(transcurridos / duracion_total * 100, 1)
 
     ritmo = round(porcentaje_gasto / porcentaje_tiempo, 2) if porcentaje_tiempo > 0 else None
+
+    # Gasto promedio diario y proyeccion (Paso 14, punto 10) -- SOLO se
+    # calculan si ya transcurrio al menos 1 dia real del periodo; nunca
+    # se inventa una proyeccion con 0 dias de datos (division por cero
+    # evitada explicitamente, no un catch generico).
+    gasto_promedio_diario = None
+    proyeccion_fin_periodo = None
+    if transcurridos > 0 and gasto_real is not None:
+        gasto_promedio_diario = round(gasto_real / transcurridos, 2)
+        proyeccion_fin_periodo = round(gasto_promedio_diario * duracion_total, 2)
+
     return {
         "porcentaje_tiempo_transcurrido": porcentaje_tiempo,
         "porcentaje_presupuesto_usado": porcentaje_gasto,
         "ritmo": ritmo,
         "consumiendose_rapido": ritmo is not None and ritmo >= UMBRAL_RITMO_PRESUPUESTO_ACELERADO,
+        "gasto_promedio_diario": gasto_promedio_diario,
+        "proyeccion_fin_periodo": proyeccion_fin_periodo,
     }
 
 
@@ -461,6 +475,10 @@ def construir_centro_optimizacion(empresa_id, cuenta_id, fecha_inicio, fecha_fin
         "diagnostico_cuenta": diagnostico_cuenta,
         "analisis_presupuesto": analisis_presupuesto,
         "ritmo_presupuestos": ritmo_presupuestos,
+        # Expuesto para que otros consumidores (Paso 14: Centro de
+        # Control, "mejor/peor segun el KPI seleccionado") no repitan
+        # la misma consulta de dias-con-datos por entidad ya hecha aqui.
+        "dias_por_entidad": dias_por_entidad,
     }, None
 
 

@@ -2053,3 +2053,144 @@ body {
     flex-direction: column;
   }
 }
+
+/* Centro de Control de Pauta (Paso 14) */
+
+.cc-seccion-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cc-estado-general {
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+  border-left: 6px solid var(--color-borde);
+}
+
+.cc-estado-general h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  letter-spacing: 0.03em;
+}
+
+.cc-estado-general p {
+  margin: 0;
+  color: #374151;
+}
+
+.cc-estado-buen_rendimiento {
+  background: #f0fdf4;
+  border-left-color: #16a34a;
+}
+
+.cc-estado-necesita_atencion {
+  background: #fef2f2;
+  border-left-color: #dc2626;
+}
+
+.cc-estado-datos_insuficientes {
+  background: #f9fafb;
+  border-left-color: #9ca3af;
+}
+
+.cc-kpi-explicacion {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.cc-acciones-pendientes {
+  display: flex;
+  align-items: center;
+}
+
+.cc-mejor-peor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.cc-mejor-peor-card {
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 6px solid var(--color-borde);
+}
+
+.cc-mejor-peor-card.cc-mejor {
+  border-left-color: #16a34a;
+}
+
+.cc-mejor-peor-card.cc-peor {
+  border-left-color: #dc2626;
+}
+
+.cc-mejor-peor-titulo {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.cc-claude-recomienda {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+
+.cc-claude-acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.cc-presupuesto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.cc-presupuesto-etiqueta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.cc-presupuesto-valor {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.cc-nav-rapida {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cc-glosario {
+  margin: 24px 0;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.cc-glosario summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .cc-mejor-peor-grid {
+    grid-template-columns: 1fr;
+  }
+  .cc-seccion-cabecera {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -68,6 +68,7 @@
     </dl>
     <div class="cabecera-seccion">
       {% if conexion_activa %}
+      <a href="{{ url_for('datos_meta.centro_control') }}" class="boton-primario">Centro de Control</a>
       <a href="{{ url_for('datos_meta.seleccionar_activos') }}" class="boton-enlace">Elegir activos vinculados</a>
       <a href="{{ url_for('datos_meta.dashboard') }}" class="boton-enlace">Dashboard</a>
       <a href="{{ url_for('datos_meta.campanas_lista') }}" class="boton-enlace">Campañas</a>
