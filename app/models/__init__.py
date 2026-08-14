@@ -39,6 +39,13 @@ from app.models.metrica import (
 )
 from app.models.presupuesto import PresupuestoPauta, TIPOS_PRESUPUESTO, PERIODOS_PRESUPUESTO
 from app.models.proyecto_pauta import ProyectoPauta, EtapaProyectoPauta, ESTADOS_PROYECTO_PAUTA
+from app.models.proyecto_estrategico import (
+    ProyectoEstrategico,
+    FaseEstrategica,
+    PasoSecuenciaEstrategica,
+    ESTADOS_PROYECTO_ESTRATEGICO,
+    TIPOS_AUDIENCIA_ESTRATEGICA,
+)
 
 __all__ = [
     "Usuario",
@@ -86,4 +93,9 @@ __all__ = [
     "ProyectoPauta",
     "EtapaProyectoPauta",
     "ESTADOS_PROYECTO_PAUTA",
+    "ProyectoEstrategico",
+    "FaseEstrategica",
+    "PasoSecuenciaEstrategica",
+    "ESTADOS_PROYECTO_ESTRATEGICO",
+    "TIPOS_AUDIENCIA_ESTRATEGICA",
 ]

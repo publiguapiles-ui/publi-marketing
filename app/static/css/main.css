@@ -321,6 +321,14 @@ body {
 .estado-badge-critico { background: #fee2e2; color: #991b1b; }
 .estado-badge-sin_datos { background: #f3f4f6; color: #6b7280; }
 
+/* Estado del proyecto estrategico (Paso 9) */
+.dm-estado-proyecto-borrador { background: #f3f4f6; color: #6b7280; }
+.dm-estado-proyecto-planificado { background: #dbeafe; color: #1e40af; }
+.dm-estado-proyecto-aprobado { background: #dcfce7; color: #166534; }
+.dm-estado-proyecto-en_ejecucion { background: #cffafe; color: #155e75; }
+.dm-estado-proyecto-finalizado { background: #e5e7eb; color: #111827; }
+.dm-estado-proyecto-pausado { background: #fef3c7; color: #92400e; }
+
 /* Nivel de confianza (Paso 8) */
 .dm-confianza {
   display: inline-block;

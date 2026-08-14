@@ -66,6 +66,20 @@ from app.services.meta.planificador import (
     obtener_proyecto,
 )
 from app.services.meta.inteligencia import construir_inteligencia
+from app.services.meta.proyectos_estrategicos import (
+    agregar_fase,
+    agregar_paso_secuencia,
+    cambiar_estado_proyecto as cambiar_estado_proyecto_estrategico,
+    construir_diagnostico_proyecto,
+    construir_seguimiento,
+    crear_proyecto as crear_proyecto_estrategico,
+    eliminar_fase,
+    eliminar_paso_secuencia,
+    listar_audiencias_disponibles,
+    listar_proyectos_empresa as listar_proyectos_estrategicos_empresa,
+    obtener_proyecto as obtener_proyecto_estrategico,
+    resumen_presupuesto_proyecto as resumen_presupuesto_proyecto_estrategico,
+)
 from app.services.periodos import ETIQUETAS_PERIODOS, PERIODOS_PREDEFINIDOS, resolver_periodo
 from app.services.presupuestos import (
     calcular_resumen_presupuesto,
@@ -73,7 +87,7 @@ from app.services.presupuestos import (
     eliminar_presupuesto,
     obtener_presupuestos_empresa,
 )
-from app.models import ESTADOS_PROYECTO_PAUTA
+from app.models import ESTADOS_PROYECTO_PAUTA, ESTADOS_PROYECTO_ESTRATEGICO, TIPOS_AUDIENCIA_ESTRATEGICA
 
 datos_meta_bp = Blueprint("datos_meta", __name__, url_prefix="/datos-meta")
 
@@ -1105,3 +1119,238 @@ def inteligencia_datos():
     if error:
         return jsonify({"ok": False, "error": error}), 400
     return jsonify({"ok": True, **_serializar_inteligencia(paquete, cuenta_id, periodo)})
+
+
+# --- Proyectos estrategicos de campaña (Paso 9) -------------------------------------
+#
+# Reutiliza exclusivamente app/services/meta/proyectos_estrategicos.py,
+# que a su vez reutiliza kpi.py (Paso 3), inteligencia.py (Paso 8) y
+# cuentas_service.py/targeting.py (Paso 5) -- ningun calculo de KPI ni
+# de oportunidades ocurre en este archivo. NUNCA crea, modifica ni
+# ejecuta nada en Meta: administra unicamente el plan que vive en
+# nuestra base de datos.
+
+def _serializar_proyecto_estrategico(proyecto):
+    return {
+        "id": proyecto.id,
+        "nombre": proyecto.nombre,
+        "objetivo": proyecto.objetivo,
+        "kpi_principal": proyecto.kpi_principal,
+        "kpi_secundarios": proyecto.kpi_secundarios,
+        "presupuesto_total": proyecto.presupuesto_total,
+        "moneda": proyecto.moneda,
+        "fecha_inicio": proyecto.fecha_inicio.isoformat(),
+        "fecha_fin": proyecto.fecha_fin.isoformat(),
+        "resultado_objetivo": proyecto.resultado_objetivo,
+        "restricciones": proyecto.restricciones,
+        "cuenta_publicitaria_id": proyecto.cuenta_publicitaria_id,
+        "estado": proyecto.estado,
+    }
+
+
+def _serializar_fase_estrategica(fase):
+    return {
+        "id": fase.id,
+        "nombre": fase.nombre,
+        "objetivo": fase.objetivo,
+        "presupuesto": fase.presupuesto,
+        "fecha_inicio": fase.fecha_inicio.isoformat() if fase.fecha_inicio else None,
+        "fecha_fin": fase.fecha_fin.isoformat() if fase.fecha_fin else None,
+        "kpi_esperado": fase.kpi_esperado,
+        "audiencia_tipo": fase.audiencia_tipo,
+        "audiencia_descripcion": fase.audiencia_descripcion,
+        "audiencia_entidad_id": fase.audiencia_entidad_id,
+        # Si audiencia_entidad_id es None, esta fase todavia NO tiene una
+        # audiencia real vinculada en Meta -- la interfaz debe indicarlo
+        # explicitamente (Paso 9, punto 5), nunca asumir que existe.
+        "audiencia_entidad_nombre": (
+            (fase.audiencia_entidad.nombre or fase.audiencia_entidad.id_externo) if fase.audiencia_entidad else None
+        ),
+        "resultado_esperado": fase.resultado_esperado,
+        "orden": fase.orden,
+    }
+
+
+def _serializar_paso_secuencia(paso):
+    return {
+        "id": paso.id,
+        "contenido": paso.contenido,
+        "audiencia_descripcion": paso.audiencia_descripcion,
+        "objetivo": paso.objetivo,
+        "duracion_dias": paso.duracion_dias,
+        "kpi": paso.kpi,
+        "orden": paso.orden,
+    }
+
+
+def _serializar_seguimiento(seguimiento):
+    return {
+        "tiene_cuenta_vinculada": seguimiento["tiene_cuenta_vinculada"],
+        "periodo": {
+            "fecha_inicio": seguimiento["periodo"]["fecha_inicio"].isoformat(),
+            "fecha_fin": seguimiento["periodo"]["fecha_fin"].isoformat(),
+        },
+        "presupuesto": seguimiento["presupuesto"],
+        "kpi_principal": seguimiento["kpi_principal"],
+    }
+
+
+def _serializar_paquete_proyecto_estrategico(proyecto, diagnostico, error_diagnostico, audiencias_disponibles, seguimiento, periodo):
+    return {
+        "proyecto": _serializar_proyecto_estrategico(proyecto),
+        "presupuesto": resumen_presupuesto_proyecto_estrategico(proyecto),
+        "fases": [_serializar_fase_estrategica(f) for f in proyecto.fases],
+        "secuencia": [_serializar_paso_secuencia(p) for p in proyecto.secuencia],
+        "audiencias_disponibles": audiencias_disponibles,
+        "seguimiento": _serializar_seguimiento(seguimiento),
+        "diagnostico": _serializar_inteligencia(diagnostico, proyecto.cuenta_publicitaria_id, periodo) if diagnostico else None,
+        "error_diagnostico": error_diagnostico,
+        "claves_kpi": CLAVES_KPI,
+        "etiquetas_kpi": ETIQUETAS_KPI,
+        "tipos_audiencia": TIPOS_AUDIENCIA_ESTRATEGICA,
+        "estados": ESTADOS_PROYECTO_ESTRATEGICO,
+    }
+
+
+@datos_meta_bp.get("/proyectos-estrategicos")
+@login_required
+def proyectos_estrategicos_lista():
+    empresa, _rol = _empresa_activa_o_404()
+    proyectos = listar_proyectos_estrategicos_empresa(empresa.id)
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+
+    return render_template(
+        "datos_meta/proyectos_estrategicos_lista.html",
+        empresa_activa=empresa,
+        proyectos=proyectos,
+        cuentas=cuentas,
+        claves_kpi=CLAVES_KPI,
+        etiquetas_kpi=ETIQUETAS_KPI,
+    )
+
+
+@datos_meta_bp.post("/proyectos-estrategicos/crear")
+@login_required
+def proyectos_estrategicos_crear():
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+
+    datos = request.get_json(silent=True) or {}
+    try:
+        if datos.get("fecha_inicio"):
+            datos["fecha_inicio"] = datetime.date.fromisoformat(datos["fecha_inicio"])
+        if datos.get("fecha_fin"):
+            datos["fecha_fin"] = datetime.date.fromisoformat(datos["fecha_fin"])
+    except ValueError:
+        return jsonify({"ok": False, "error": "Formato de fecha inválido."}), 400
+
+    proyecto, error = crear_proyecto_estrategico(empresa.id, usuario["id"], datos)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "proyecto_id": proyecto.id}), 201
+
+
+def _cargar_paquete_proyecto_estrategico(empresa, proyecto, periodo):
+    diagnostico, error_diagnostico = construir_diagnostico_proyecto(proyecto, periodo["fecha_inicio"], periodo["fecha_fin"])
+    audiencias_disponibles = (
+        listar_audiencias_disponibles(empresa.id, proyecto.cuenta_publicitaria_id) if proyecto.cuenta_publicitaria_id else []
+    )
+    seguimiento = construir_seguimiento(proyecto)
+    return _serializar_paquete_proyecto_estrategico(proyecto, diagnostico, error_diagnostico, audiencias_disponibles, seguimiento, periodo)
+
+
+@datos_meta_bp.get("/proyectos-estrategicos/<int:proyecto_id>")
+@login_required
+def proyectos_estrategicos_detalle(proyecto_id):
+    empresa, _rol = _empresa_activa_o_404()
+    proyecto = obtener_proyecto_estrategico(empresa.id, proyecto_id)
+    if proyecto is None:
+        abort(404)
+
+    periodo = _leer_periodo_y_comparar(request.args)
+    datos = _cargar_paquete_proyecto_estrategico(empresa, proyecto, periodo)
+
+    return render_template(
+        "datos_meta/proyectos_estrategicos_detalle.html",
+        empresa_activa=empresa,
+        cuentas=listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria"),
+        datos=datos,
+        periodos=PERIODOS_PREDEFINIDOS,
+        etiquetas_periodos=ETIQUETAS_PERIODOS,
+        periodo_clave=periodo["periodo_clave"],
+    )
+
+
+@datos_meta_bp.get("/proyectos-estrategicos/<int:proyecto_id>/datos")
+@login_required
+def proyectos_estrategicos_datos(proyecto_id):
+    empresa, _rol = _empresa_activa_o_404()
+    proyecto = obtener_proyecto_estrategico(empresa.id, proyecto_id)
+    if proyecto is None:
+        return jsonify({"ok": False, "error": "El proyecto no existe o no pertenece a esta empresa."}), 404
+
+    periodo = _leer_periodo_y_comparar(request.args)
+    return jsonify(_cargar_paquete_proyecto_estrategico(empresa, proyecto, periodo))
+
+
+@datos_meta_bp.post("/proyectos-estrategicos/<int:proyecto_id>/estado")
+@login_required
+def proyectos_estrategicos_cambiar_estado(proyecto_id):
+    empresa, _rol = _empresa_activa_o_404()
+    datos = request.get_json(silent=True) or {}
+
+    proyecto, error = cambiar_estado_proyecto_estrategico(empresa.id, proyecto_id, datos.get("estado"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "estado": proyecto.estado})
+
+
+@datos_meta_bp.post("/proyectos-estrategicos/<int:proyecto_id>/fases")
+@login_required
+def proyectos_estrategicos_agregar_fase(proyecto_id):
+    empresa, _rol = _empresa_activa_o_404()
+    datos = request.get_json(silent=True) or {}
+    try:
+        if datos.get("fecha_inicio"):
+            datos["fecha_inicio"] = datetime.date.fromisoformat(datos["fecha_inicio"])
+        if datos.get("fecha_fin"):
+            datos["fecha_fin"] = datetime.date.fromisoformat(datos["fecha_fin"])
+    except ValueError:
+        return jsonify({"ok": False, "error": "Formato de fecha inválido."}), 400
+
+    fase, error = agregar_fase(empresa.id, proyecto_id, datos)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "fase_id": fase.id}), 201
+
+
+@datos_meta_bp.post("/proyectos-estrategicos/<int:proyecto_id>/fases/<int:fase_id>/eliminar")
+@login_required
+def proyectos_estrategicos_eliminar_fase(proyecto_id, fase_id):
+    empresa, _rol = _empresa_activa_o_404()
+    ok, error = eliminar_fase(empresa.id, proyecto_id, fase_id)
+    if not ok:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True})
+
+
+@datos_meta_bp.post("/proyectos-estrategicos/<int:proyecto_id>/secuencia")
+@login_required
+def proyectos_estrategicos_agregar_secuencia(proyecto_id):
+    empresa, _rol = _empresa_activa_o_404()
+    datos = request.get_json(silent=True) or {}
+
+    paso, error = agregar_paso_secuencia(empresa.id, proyecto_id, datos)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "paso_id": paso.id}), 201
+
+
+@datos_meta_bp.post("/proyectos-estrategicos/<int:proyecto_id>/secuencia/<int:paso_id>/eliminar")
+@login_required
+def proyectos_estrategicos_eliminar_secuencia(proyecto_id, paso_id):
+    empresa, _rol = _empresa_activa_o_404()
+    ok, error = eliminar_paso_secuencia(empresa.id, proyecto_id, paso_id)
+    if not ok:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True})

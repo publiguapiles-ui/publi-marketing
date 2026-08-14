@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block titulo %}{{ datos.proyecto.nombre }} · Proyectos Estratégicos{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>{{ datos.proyecto.nombre }}</h1>
+    <p class="perfil-nota">
+      <span class="estado-badge dm-estado-proyecto-{{ datos.proyecto.estado }}" id="pe-estado-badge">{{ datos.proyecto.estado.replace("_", " ") }}</span>
+      — {{ datos.proyecto.objetivo }} · KPI principal: {{ datos.etiquetas_kpi.get(datos.proyecto.kpi_principal, datos.proyecto.kpi_principal) }}
+    </p>
+  </div>
+  <a href="{{ url_for('datos_meta.proyectos_estrategicos_lista') }}" class="boton-enlace">← Proyectos Estratégicos</a>
+</div>
+
+<section id="pe-resumen">
+  <h2 class="ps-seccion-titulo">Resumen</h2>
+  <dl class="perfil-datos">
+    <dt>Empresa</dt><dd>{{ empresa_activa.nombre }}</dd>
+    <dt>Objetivo</dt><dd>{{ datos.proyecto.objetivo }}</dd>
+    <dt>Presupuesto total</dt><dd>{{ datos.proyecto.presupuesto_total }} {{ datos.proyecto.moneda }}</dd>
+    <dt>Período del proyecto</dt><dd>{{ datos.proyecto.fecha_inicio }} – {{ datos.proyecto.fecha_fin }}</dd>
+    <dt>KPI principal</dt><dd>{{ datos.etiquetas_kpi.get(datos.proyecto.kpi_principal, datos.proyecto.kpi_principal) }}</dd>
+    <dt>KPI secundarios</dt>
+    <dd>{{ (datos.proyecto.kpi_secundarios | map('replace', '_', ' ') | list | join(", ")) if datos.proyecto.kpi_secundarios else "Ninguno" }}</dd>
+    <dt>Resultado objetivo (meta del proyecto, no un resultado real)</dt>
+    <dd>{{ datos.proyecto.resultado_objetivo or "No definido" }}</dd>
+    {% if datos.proyecto.restricciones %}
+    <dt>Notas / restricciones</dt><dd>{{ datos.proyecto.restricciones }}</dd>
+    {% endif %}
+  </dl>
+  <label>
+    Estado del proyecto
+    <select id="pe-selector-estado">
+      {% for estado in datos.estados %}
+      <option value="{{ estado }}" {% if estado == datos.proyecto.estado %}selected{% endif %}>{{ estado.replace("_", " ") | capitalize }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <p class="perfil-nota">Un cambio de estado es solo una marca interna del equipo — nunca ejecuta ni modifica nada en Meta.</p>
+  <p id="pe-estado-mensaje" class="perfil-nota" hidden></p>
+</section>
+
+<section id="pe-diagnostico">
+  <h2 class="ps-seccion-titulo">Diagnóstico (Paso 8)</h2>
+  {% if not datos.proyecto.cuenta_publicitaria_id %}
+  <div class="estado-vacio"><p>Este proyecto no tiene una cuenta publicitaria vinculada — no hay diagnóstico real disponible. Puedes vincular una cuenta editando el proyecto.</p></div>
+  {% else %}
+  <form id="pe-filtro-diagnostico" class="formulario-simple dm-form-kpi" method="get">
+    <label>
+      Período de análisis
+      <select name="periodo">
+        {% for p in periodos %}
+        <option value="{{ p }}" {% if p == periodo_clave %}selected{% endif %}>{{ etiquetas_periodos[p] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="boton-primario">Aplicar</button>
+  </form>
+  {% if datos.error_diagnostico %}
+  <div class="estado-vacio"><p>{{ datos.error_diagnostico }}</p></div>
+  {% else %}
+  <div id="pe-diagnostico-areas"></div>
+  <h3 class="ps-seccion-titulo">Oportunidades — usar como base de una fase</h3>
+  <div id="pe-oportunidades"></div>
+  <h3 class="ps-seccion-titulo">Alertas</h3>
+  <div id="pe-alertas"></div>
+  {% endif %}
+  {% endif %}
+</section>
+
+<section id="pe-presupuesto">
+  <h2 class="ps-seccion-titulo">Presupuesto</h2>
+  <dl class="perfil-datos">
+    <dt>Total</dt><dd>{{ datos.presupuesto.presupuesto_total }} {{ datos.proyecto.moneda }}</dd>
+    <dt>Asignado a fases</dt><dd>{{ datos.presupuesto.asignado }} {{ datos.proyecto.moneda }}</dd>
+    <dt>Disponible</dt><dd>{{ datos.presupuesto.disponible }} {{ datos.proyecto.moneda }}</dd>
+    <dt>% asignado</dt><dd>{{ datos.presupuesto.porcentaje_asignado }}%{% if datos.presupuesto.porcentaje_asignado is none %} —{% endif %}</dd>
+  </dl>
+</section>
+
+<section id="pe-fases">
+  <h2 class="ps-seccion-titulo">Fases</h2>
+  <p class="perfil-nota">Completamente configurables — no es obligatorio usar cuatro fases. La suma de presupuestos nunca puede superar el presupuesto total.</p>
+  {% if datos.fases %}
+  <div class="dm-tabla-scroll">
+  <table class="dm-tabla-kpi">
+    <thead><tr><th>Fase</th><th>Objetivo</th><th>Presupuesto</th><th>%</th><th>Fechas</th><th>KPI esperado</th><th>Audiencia</th><th>Resultado esperado</th><th></th></tr></thead>
+    <tbody>
+      {% for fase in datos.fases %}
+      <tr>
+        <td>{{ fase.nombre }}</td>
+        <td>{{ fase.objetivo or "—" }}</td>
+        <td>{{ fase.presupuesto }} {{ datos.proyecto.moneda }}</td>
+        <td>{{ ((fase.presupuesto / datos.proyecto.presupuesto_total) * 100) | round(1) if datos.proyecto.presupuesto_total else "—" }}%</td>
+        <td>{{ (fase.fecha_inicio or "—") ~ " – " ~ (fase.fecha_fin or "—") if fase.fecha_inicio or fase.fecha_fin else "—" }}</td>
+        <td>{{ datos.etiquetas_kpi.get(fase.kpi_esperado, fase.kpi_esperado) if fase.kpi_esperado else "—" }}</td>
+        <td>
+          {% if fase.audiencia_entidad_nombre %}
+          <span class="dm-badge-mejor">Real en Meta</span> {{ fase.audiencia_entidad_nombre }}
+          {% elif fase.audiencia_descripcion or fase.audiencia_tipo %}
+          <span class="dm-confianza dm-confianza-baja">No existe en Meta</span> {{ fase.audiencia_descripcion or fase.audiencia_tipo }}
+          {% else %}
+          No definida
+          {% endif %}
+        </td>
+        <td>{{ fase.resultado_esperado or "—" }}</td>
+        <td><button type="button" class="boton-enlace pe-boton-eliminar-fase" data-fase-id="{{ fase.id }}">Eliminar</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="perfil-nota">Todavía no hay ninguna fase definida.</p>
+  {% endif %}
+</section>
+
+<section id="pe-nueva-fase">
+  <h2 class="ps-seccion-titulo">Agregar fase</h2>
+  <form id="form-nueva-fase" class="formulario-simple">
+    <label>Nombre <input type="text" name="nombre" placeholder="Reconocimiento" required /></label>
+    <label>Objetivo <input type="text" name="objetivo" placeholder="Alcance" /></label>
+    <label>Presupuesto <input type="number" name="presupuesto" min="0" step="0.01" required /></label>
+    <label>Fecha inicio <input type="date" name="fecha_inicio" /></label>
+    <label>Fecha final <input type="date" name="fecha_fin" /></label>
+    <label>
+      KPI esperado
+      <select name="kpi_esperado">
+        <option value="">Sin especificar</option>
+        {% for clave in datos.claves_kpi %}
+        <option value="{{ clave }}">{{ datos.etiquetas_kpi.get(clave, clave) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Tipo de audiencia
+      <select name="audiencia_tipo">
+        <option value="">Sin especificar</option>
+        {% for tipo in datos.tipos_audiencia %}
+        <option value="{{ tipo }}">{{ tipo.replace("_", " ") | capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Descripción de la audiencia (estrategia, texto libre) <input type="text" name="audiencia_descripcion" placeholder="Personas que interactuaron en los últimos 90 días" /></label>
+    <label>
+      Audiencia real ya sincronizada de Meta (opcional)
+      <select name="audiencia_entidad_id">
+        <option value="">Ninguna — audiencia solo planeada</option>
+        {% for aud in datos.audiencias_disponibles %}
+        <option value="{{ aud.id }}">{{ aud.nombre }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Resultado esperado <input type="text" name="resultado_esperado" placeholder="20 mensajes iniciados" /></label>
+    <button type="submit" class="boton-primario">Agregar fase</button>
+    <p id="nueva-fase-mensaje" class="perfil-nota" hidden></p>
+  </form>
+</section>
+
+<section id="pe-audiencias">
+  <h2 class="ps-seccion-titulo">Audiencias disponibles en Meta</h2>
+  <p class="perfil-nota">Conjuntos de anuncios ya sincronizados de esta cuenta — las únicas audiencias "reales" que se pueden vincular a una fase. Nunca se crea una audiencia nueva en Meta desde aquí.</p>
+  {% if datos.audiencias_disponibles %}
+  <div class="dm-tabla-scroll">
+  <table class="dm-tabla-kpi">
+    <thead><tr><th>Audiencia (conjunto de anuncios)</th><th>Configuración real</th></tr></thead>
+    <tbody>
+      {% for aud in datos.audiencias_disponibles %}
+      <tr>
+        <td>{{ aud.nombre }}</td>
+        <td>
+          {% if aud.targeting and not aud.targeting.sin_datos %}
+            {{ aud.targeting.edades or "" }} {{ aud.targeting.sexo or "" }} {{ aud.targeting.ubicaciones or "" }}
+          {% else %}
+            No disponible
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="perfil-nota">No hay conjuntos de anuncios sincronizados todavía para la cuenta de este proyecto.</p>
+  {% endif %}
+</section>
+
+<section id="pe-secuencia">
+  <h2 class="ps-seccion-titulo">Secuencia estratégica</h2>
+  <p class="perfil-nota">Define el orden de contenidos que Marketing usará para producir el material — nunca crea ni programa nada en Meta.</p>
+  {% if datos.secuencia %}
+  <div class="dm-tabla-scroll">
+  <table class="dm-tabla-kpi">
+    <thead><tr><th>#</th><th>Contenido</th><th>Audiencia</th><th>Objetivo</th><th>Duración</th><th>KPI</th><th></th></tr></thead>
+    <tbody>
+      {% for paso in datos.secuencia %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ paso.contenido }}</td>
+        <td>{{ paso.audiencia_descripcion or "—" }}</td>
+        <td>{{ paso.objetivo or "—" }}</td>
+        <td>{{ paso.duracion_dias ~ " días" if paso.duracion_dias else "—" }}</td>
+        <td>{{ datos.etiquetas_kpi.get(paso.kpi, paso.kpi) if paso.kpi else "—" }}</td>
+        <td><button type="button" class="boton-enlace pe-boton-eliminar-secuencia" data-paso-id="{{ paso.id }}">Eliminar</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="perfil-nota">Todavía no hay ningún paso de secuencia definido.</p>
+  {% endif %}
+  <form id="form-nuevo-paso-secuencia" class="formulario-simple">
+    <label>Contenido <input type="text" name="contenido" placeholder="VIDEO 1" required /></label>
+    <label>Audiencia (texto libre) <input type="text" name="audiencia_descripcion" placeholder="Público frío" /></label>
+    <label>Objetivo <input type="text" name="objetivo" placeholder="Reconocimiento" /></label>
+    <label>Duración (días) <input type="number" name="duracion_dias" min="1" step="1" /></label>
+    <label>
+      KPI
+      <select name="kpi">
+        <option value="">Sin especificar</option>
+        {% for clave in datos.claves_kpi %}
+        <option value="{{ clave }}">{{ datos.etiquetas_kpi.get(clave, clave) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="boton-primario">Agregar paso</button>
+    <p id="nuevo-paso-secuencia-mensaje" class="perfil-nota" hidden></p>
+  </form>
+</section>
+
+<section id="pe-seguimiento">
+  <h2 class="ps-seccion-titulo">Seguimiento: planificado vs. real</h2>
+  {% if not datos.seguimiento.tiene_cuenta_vinculada %}
+  <div class="estado-vacio"><p>Este proyecto no tiene una cuenta publicitaria vinculada — no hay datos reales que comparar contra lo planificado todavía.</p></div>
+  {% else %}
+  <dl class="perfil-datos">
+    <dt>Presupuesto — planificado</dt><dd>{{ datos.seguimiento.presupuesto.planificado }} {{ datos.seguimiento.presupuesto.moneda }}</dd>
+    <dt>Presupuesto — real</dt><dd>{{ datos.seguimiento.presupuesto.real if datos.seguimiento.presupuesto.real is not none else "No disponible" }} {{ datos.seguimiento.presupuesto.moneda if datos.seguimiento.presupuesto.real is not none else "" }}</dd>
+    <dt>{{ datos.etiquetas_kpi.get(datos.seguimiento.kpi_principal.clave, datos.seguimiento.kpi_principal.clave) }} — objetivo</dt>
+    <dd>{{ datos.seguimiento.kpi_principal.objetivo_texto or "No definido" }}</dd>
+    <dt>{{ datos.etiquetas_kpi.get(datos.seguimiento.kpi_principal.clave, datos.seguimiento.kpi_principal.clave) }} — real</dt>
+    <dd>{{ datos.seguimiento.kpi_principal.valor_real if datos.seguimiento.kpi_principal.valor_real is not none else "No disponible" }}</dd>
+  </dl>
+  <p class="perfil-nota">"Objetivo" es la meta que el proyecto se propuso, nunca una promesa de resultado. "Real" se calcula siempre desde las métricas ya sincronizadas del período del proyecto.</p>
+  {% endif %}
+</section>
+
+<script>
+  window.DM_PROYECTO_ID = {{ datos.proyecto.id }};
+  window.DM_PROYECTO_DATOS = {{ datos | tojson }};
+  window.DM_PROYECTO_DATOS_URL = "{{ url_for('datos_meta.proyectos_estrategicos_datos', proyecto_id=datos.proyecto.id) }}";
+  window.DM_PROYECTO_URL = "{{ url_for('datos_meta.proyectos_estrategicos_detalle', proyecto_id=datos.proyecto.id) }}";
+  window.DM_PROYECTO_ESTADO_URL = "{{ url_for('datos_meta.proyectos_estrategicos_cambiar_estado', proyecto_id=datos.proyecto.id) }}";
+  window.DM_PROYECTO_FASES_URL = "{{ url_for('datos_meta.proyectos_estrategicos_agregar_fase', proyecto_id=datos.proyecto.id) }}";
+  window.DM_PROYECTO_FASE_ELIMINAR_URL_BASE = "{{ url_for('datos_meta.proyectos_estrategicos_eliminar_fase', proyecto_id=datos.proyecto.id, fase_id=0) }}".replace("/0/eliminar", "/__ID__/eliminar");
+  window.DM_PROYECTO_SECUENCIA_URL = "{{ url_for('datos_meta.proyectos_estrategicos_agregar_secuencia', proyecto_id=datos.proyecto.id) }}";
+  window.DM_PROYECTO_SECUENCIA_ELIMINAR_URL_BASE = "{{ url_for('datos_meta.proyectos_estrategicos_eliminar_secuencia', proyecto_id=datos.proyecto.id, paso_id=0) }}".replace("/0/eliminar", "/__ID__/eliminar");
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_proyectos_estrategicos.js') }}"></script>
+{% endblock %}
