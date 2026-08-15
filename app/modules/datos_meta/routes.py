@@ -2052,6 +2052,7 @@ def _serializar_centro_control(paquete):
         "dias_con_datos": paquete["dias_con_datos"],
         "claves_kpi": CLAVES_KPI,
         "etiquetas_kpi": ETIQUETAS_KPI,
+        "etiquetas_kpi_sencillas": ETIQUETAS_KPI_SENCILLAS,
         "explicaciones_kpi": EXPLICACIONES_KPI,
         "kpis_tarjetas": KPIS_TARJETAS_PRINCIPALES,
         "kpis_mejor_peor_disponibles": KPIS_MEJOR_PEOR_DISPONIBLES,

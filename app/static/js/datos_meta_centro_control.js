@@ -1,11 +1,17 @@
 (function () {
   // Centro de Control de Pauta (Paso 14). La pantalla es 100%
   // renderizada por el servidor (Jinja, igual que Optimizacion) --
-  // este archivo SOLO hace dos cosas: (1) recarga la pagina cuando
-  // cambia un filtro (mismo patron que Optimizacion/Chat de Pauta) y
-  // (2) dibuja los 4 graficos de evolucion reutilizando la MISMA
-  // tecnica SVG liviana ya usada en datos_meta_dashboard.js (Paso 4) --
-  // no se agrega ninguna libreria grafica nueva.
+  // este archivo hace: (1) recarga la pagina cuando cambia un filtro
+  // (mismo patron que Optimizacion/Chat de Pauta) y (2) dibuja los
+  // graficos de evolucion/por campana del KPI elegido en el selector,
+  // reutilizando la MISMA tecnica SVG liviana ya usada en
+  // datos_meta_dashboard.js (Paso 4) -- no se agrega ninguna libreria
+  // grafica nueva. Todos los KPI ya venian en window.CC_DATOS
+  // (serie_diaria y campanas traen el dict completo de KPI por dia/
+  // entidad); el selector solo elige cual de esas claves graficar, sin
+  // pedir datos nuevos al servidor.
+
+  let kpiSeleccionado = null;
 
   function crear(etiqueta, clases) {
     const el = document.createElement(etiqueta);
@@ -100,47 +106,75 @@
     return card;
   }
 
-  function renderGraficos(datos) {
+  function kpisConDatos(datos) {
+    const claves = datos.claves_kpi || [];
+    const serieDiaria = datos.serie_diaria || [];
+    const campanas = datos.campanas || [];
+    return claves.filter((clave) => {
+      const enSerie = serieDiaria.some((d) => d[clave] !== null && d[clave] !== undefined);
+      const enCampanas = campanas.some((c) => c.kpis && c.kpis[clave] !== null && c.kpis[clave] !== undefined);
+      return enSerie || enCampanas;
+    });
+  }
+
+  function etiquetaKpi(datos, clave) {
+    const sencillas = datos.etiquetas_kpi_sencillas || {};
+    const tecnicas = datos.etiquetas_kpi || {};
+    return sencillas[clave] || tecnicas[clave] || clave;
+  }
+
+  function renderSelector(datos, disponibles) {
+    const nav = document.getElementById("cc-grafico-selector");
+    if (!nav) return;
+    nav.innerHTML = "";
+    disponibles.forEach((clave) => {
+      const boton = crear("button", "cc-grafico-selector-item");
+      boton.type = "button";
+      boton.textContent = etiquetaKpi(datos, clave);
+      if (clave === kpiSeleccionado) boton.classList.add("cc-grafico-activo");
+      boton.addEventListener("click", () => {
+        kpiSeleccionado = clave;
+        renderSelector(datos, disponibles);
+        renderPanel(datos, clave);
+      });
+      nav.appendChild(boton);
+    });
+  }
+
+  function renderPanel(datos, clave) {
     const cont = document.getElementById("cc-graficos");
     if (!cont) return;
     cont.innerHTML = "";
 
-    const serieDiaria = (datos.serie_diaria || []).map((d) => ({ etiqueta: d.fecha, spend: d.spend, resultados: d.resultados, costo_por_resultado: d.costo_por_resultado }));
+    const etiqueta = etiquetaKpi(datos, clave);
+    const serieDiaria = (datos.serie_diaria || []).map((d) => ({ etiqueta: d.fecha, valor: d[clave] }));
+    const serieEvolucion = construirEjeSerie(serieDiaria);
+    const hayEvolucion = serieEvolucion.some((p) => p.valor !== null && p.valor !== undefined);
+    cont.appendChild(tarjetaGrafico(`${etiqueta} -- evolución diaria`, hayEvolucion ? construirLineas([serieEvolucion], ["#2563eb"]) : null));
 
-    // 1) Inversion vs resultados
-    const serieSpend = construirEjeSerie(serieDiaria.map((d) => ({ etiqueta: d.etiqueta, valor: d.spend })));
-    const serieResultados = construirEjeSerie(serieDiaria.map((d) => ({ etiqueta: d.etiqueta, valor: d.resultados })));
-    const hayInversionResultados = serieSpend.some((p) => p.valor !== null && p.valor !== undefined) || serieResultados.some((p) => p.valor !== null && p.valor !== undefined);
-    let contenido = null;
-    if (hayInversionResultados) {
-      contenido = crear("div");
-      contenido.appendChild(construirLineas([serieSpend, serieResultados], ["#2563eb", "#16a34a"]));
-      const leyenda = crear("div", "dm-grafico-leyenda");
-      [["Inversión", "#2563eb"], ["Resultados", "#16a34a"]].forEach(([texto, color]) => {
-        const span = crear("span");
-        span.textContent = texto;
-        span.style.setProperty("--color-leyenda", color);
-        leyenda.appendChild(span);
-      });
-      contenido.appendChild(leyenda);
-    }
-    cont.appendChild(tarjetaGrafico("Inversión vs. resultados", contenido));
-
-    // 2) Costo por resultado
-    const serieCosto = construirEjeSerie(serieDiaria.map((d) => ({ etiqueta: d.etiqueta, valor: d.costo_por_resultado })));
-    const hayCosto = serieCosto.some((p) => p.valor !== null && p.valor !== undefined);
-    cont.appendChild(tarjetaGrafico("Costo por resultado", hayCosto ? construirLineas([serieCosto], ["#ea580c"]) : null));
-
-    // 3) Rendimiento por campaña (costo por resultado, comparacion)
     const campanas = datos.campanas || [];
-    const serieRendimiento = construirEjeSerie(campanas.map((c) => ({ etiqueta: c.nombre, valor: c.kpis.costo_por_resultado })));
-    const hayRendimiento = serieRendimiento.some((p) => p.valor !== null && p.valor !== undefined);
-    cont.appendChild(tarjetaGrafico("Rendimiento por campaña (costo por resultado)", hayRendimiento ? construirBarras(serieRendimiento, "#7c3aed") : null));
+    const seriePorCampana = construirEjeSerie(campanas.map((c) => ({ etiqueta: c.nombre, valor: c.kpis ? c.kpis[clave] : null })));
+    const hayPorCampana = seriePorCampana.some((p) => p.valor !== null && p.valor !== undefined);
+    cont.appendChild(tarjetaGrafico(`${etiqueta} -- por campaña`, hayPorCampana ? construirBarras(seriePorCampana, "#7c3aed") : null));
+  }
 
-    // 4) Distribucion de inversion
-    const serieInversion = construirEjeSerie(campanas.map((c) => ({ etiqueta: c.nombre, valor: c.kpis.spend })));
-    const hayInversion = serieInversion.some((p) => p.valor !== null && p.valor !== undefined);
-    cont.appendChild(tarjetaGrafico("Distribución de inversión por campaña", hayInversion ? construirBarras(serieInversion, "#2563eb") : null));
+  function renderGraficos(datos) {
+    const disponibles = kpisConDatos(datos);
+    if (!disponibles.length) {
+      const nav = document.getElementById("cc-grafico-selector");
+      if (nav) nav.innerHTML = "";
+      const cont = document.getElementById("cc-graficos");
+      if (cont) {
+        cont.innerHTML = "";
+        cont.appendChild(tarjetaGrafico("Gráficos", null));
+      }
+      return;
+    }
+    if (!kpiSeleccionado || disponibles.indexOf(kpiSeleccionado) === -1) {
+      kpiSeleccionado = disponibles.indexOf("spend") !== -1 ? "spend" : disponibles[0];
+    }
+    renderSelector(datos, disponibles);
+    renderPanel(datos, kpiSeleccionado);
   }
 
   document.addEventListener("DOMContentLoaded", () => {
