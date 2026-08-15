@@ -2604,6 +2604,78 @@ body {
   }
 }
 
+/* --- Conexiones: acciones agrupadas por área (en vez de una fila plana de enlaces) --- */
+
+.dm-acciones-principal {
+  display: inline-block;
+  margin: 4px 0 20px;
+}
+
+.dm-acciones-categorias {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.dm-acciones-grupo {
+  flex: 1 1 200px;
+  min-width: 180px;
+}
+
+.dm-acciones-grupo-titulo {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.dm-acciones-grupo-botones {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dm-accion-boton {
+  display: block;
+  width: 100%;
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-texto);
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dm-accion-boton:hover {
+  border-color: var(--color-acento);
+  color: var(--color-acento);
+}
+
+.dm-accion-boton-destructiva {
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.dm-accion-boton-destructiva:hover {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+@media (max-width: 640px) {
+  .dm-accion-boton {
+    min-height: var(--tamano-tactil-minimo);
+    display: flex;
+    align-items: center;
+  }
+}
+
 /* --- Botones/enlaces táctiles (punto 22) ---------------------------- */
 
 @media (max-width: 640px) {

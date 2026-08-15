@@ -68,24 +68,48 @@
       <dt>Último uso</dt>
       <dd>{{ conexion.ultimo_uso_en.strftime("%d/%m/%Y %H:%M") if conexion.ultimo_uso_en else "—" }}</dd>
     </dl>
-    <div class="cabecera-seccion">
-      {% if conexion_activa %}
-      <a href="{{ url_for('datos_meta.centro_control') }}" class="boton-primario">Centro de Control</a>
-      <a href="{{ url_for('datos_meta.seleccionar_activos') }}" class="boton-enlace">Elegir activos vinculados</a>
-      <a href="{{ url_for('datos_meta.dashboard') }}" class="boton-enlace">Dashboard</a>
-      <a href="{{ url_for('datos_meta.campanas_lista') }}" class="boton-enlace">Campañas</a>
-      <a href="{{ url_for('datos_meta.audiencias') }}" class="boton-enlace">Audiencias</a>
-      <a href="{{ url_for('datos_meta.planificador_lista') }}" class="boton-enlace">Planificador</a>
-      <a href="{{ url_for('datos_meta.inteligencia') }}" class="boton-enlace">Inteligencia</a>
-      <a href="{{ url_for('datos_meta.proyectos_estrategicos_lista') }}" class="boton-enlace">Proyectos Estratégicos</a>
-      <a href="{{ url_for('datos_meta.optimizacion') }}" class="boton-enlace">Optimización</a>
-      <a href="{{ url_for('datos_meta.acciones_lista') }}" class="boton-enlace">Acciones</a>
-      <a href="{{ url_for('datos_meta.chat_pauta') }}" class="boton-enlace">Chat de Pauta</a>
-      <a href="{{ url_for('datos_meta.informes_lista') }}" class="boton-enlace">Informes</a>
-      <a href="{{ url_for('datos_meta.kpi_prueba') }}" class="boton-enlace">Prueba de KPI</a>
-      <button type="button" id="boton-desconectar" class="boton-enlace" data-conexion-id="{{ conexion.id }}">Desconectar</button>
-      {% endif %}
+    {% if conexion_activa %}
+    <a href="{{ url_for('datos_meta.centro_control') }}" class="boton-primario dm-acciones-principal">Ir al Centro de Control</a>
+
+    <div class="dm-acciones-categorias">
+      <div class="dm-acciones-grupo">
+        <h3 class="dm-acciones-grupo-titulo">Datos y análisis</h3>
+        <div class="dm-acciones-grupo-botones">
+          <a href="{{ url_for('datos_meta.campanas_lista') }}" class="dm-accion-boton">Campañas</a>
+          <a href="{{ url_for('datos_meta.audiencias') }}" class="dm-accion-boton">Audiencias</a>
+          <a href="{{ url_for('datos_meta.optimizacion') }}" class="dm-accion-boton">Optimización</a>
+          <a href="{{ url_for('datos_meta.dashboard') }}" class="dm-accion-boton">Dashboard</a>
+          <a href="{{ url_for('datos_meta.kpi_prueba') }}" class="dm-accion-boton">Prueba de KPI</a>
+        </div>
+      </div>
+
+      <div class="dm-acciones-grupo">
+        <h3 class="dm-acciones-grupo-titulo">Estrategia</h3>
+        <div class="dm-acciones-grupo-botones">
+          <a href="{{ url_for('datos_meta.inteligencia') }}" class="dm-accion-boton">Inteligencia</a>
+          <a href="{{ url_for('datos_meta.planificador_lista') }}" class="dm-accion-boton">Planificador</a>
+          <a href="{{ url_for('datos_meta.proyectos_estrategicos_lista') }}" class="dm-accion-boton">Proyectos Estratégicos</a>
+          <a href="{{ url_for('datos_meta.acciones_lista') }}" class="dm-accion-boton">Acciones</a>
+        </div>
+      </div>
+
+      <div class="dm-acciones-grupo">
+        <h3 class="dm-acciones-grupo-titulo">Comunicación</h3>
+        <div class="dm-acciones-grupo-botones">
+          <a href="{{ url_for('datos_meta.chat_pauta') }}" class="dm-accion-boton">Chat de Pauta</a>
+          <a href="{{ url_for('datos_meta.informes_lista') }}" class="dm-accion-boton">Informes</a>
+        </div>
+      </div>
+
+      <div class="dm-acciones-grupo">
+        <h3 class="dm-acciones-grupo-titulo">Cuenta</h3>
+        <div class="dm-acciones-grupo-botones">
+          <a href="{{ url_for('datos_meta.seleccionar_activos') }}" class="dm-accion-boton">Elegir activos vinculados</a>
+          <button type="button" id="boton-desconectar" class="dm-accion-boton dm-accion-boton-destructiva" data-conexion-id="{{ conexion.id }}">Desconectar</button>
+        </div>
+      </div>
     </div>
+    {% endif %}
   </section>
 
   {% if conexion_activa %}
