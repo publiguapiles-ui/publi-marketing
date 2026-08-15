@@ -2257,6 +2257,10 @@ body {
   background: #fff;
 }
 
+.cc-grafico-selector[hidden] {
+  display: none;
+}
+
 .cc-grafico-selector-item {
   display: block;
   width: 100%;

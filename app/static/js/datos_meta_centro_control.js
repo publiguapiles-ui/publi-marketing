@@ -160,9 +160,9 @@
 
   function renderGraficos(datos) {
     const disponibles = kpisConDatos(datos);
+    const nav = document.getElementById("cc-grafico-selector");
     if (!disponibles.length) {
-      const nav = document.getElementById("cc-grafico-selector");
-      if (nav) nav.innerHTML = "";
+      if (nav) { nav.innerHTML = ""; nav.hidden = true; }
       const cont = document.getElementById("cc-graficos");
       if (cont) {
         cont.innerHTML = "";
@@ -170,6 +170,7 @@
       }
       return;
     }
+    if (nav) nav.hidden = false;
     if (!kpiSeleccionado || disponibles.indexOf(kpiSeleccionado) === -1) {
       kpiSeleccionado = disponibles.indexOf("spend") !== -1 ? "spend" : disponibles[0];
     }
