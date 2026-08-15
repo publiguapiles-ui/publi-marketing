@@ -71,6 +71,11 @@ class InformePauta(db.Model):
     estado = db.Column(db.String(10), nullable=False, default="listo")
     error_mensaje = db.Column(db.Text, nullable=True)
 
+    # Paso 16, punto 16: agrupar el historial en "Recientes" y
+    # "Favoritos" -- un simple marcador manual, nunca una clasificacion
+    # automatica ni un calculo nuevo.
+    favorito = db.Column(db.Boolean, nullable=False, default=False)
+
     creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     empresa = db.relationship("Empresa")

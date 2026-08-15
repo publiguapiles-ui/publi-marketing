@@ -1,0 +1,17 @@
+{# Navegación compartida de Datos de Meta (Paso 16, punto 2) -- misma
+   lista de 6 elementos en TODAS las pantallas principales, igual en
+   computadora y móvil (se envuelve en varias líneas en pantallas
+   angostas, nunca scroll horizontal). Pantallas secundarias
+   (Conexiones, Inteligencia, Proyectos Estratégicos, Planificador,
+   Prueba de KPI) siguen existiendo pero deliberadamente no están aquí
+   -- "no crear menús innecesarios" -- se llega a ellas desde
+   Conexiones, el enlace de ajustes al final de esta barra. #}
+<nav class="dm-nav" aria-label="Datos de Meta">
+  <a href="{{ url_for('datos_meta.centro_control') }}" class="dm-nav-enlace {{ 'dm-nav-activo' if request.endpoint == 'datos_meta.centro_control' }}">Centro de Control</a>
+  <a href="{{ url_for('datos_meta.campanas_lista') }}" class="dm-nav-enlace {{ 'dm-nav-activo' if request.endpoint in ('datos_meta.campanas_lista', 'datos_meta.campana_detalle') }}">Campañas</a>
+  <a href="{{ url_for('datos_meta.audiencias') }}" class="dm-nav-enlace {{ 'dm-nav-activo' if request.endpoint == 'datos_meta.audiencias' }}">Audiencias</a>
+  <a href="{{ url_for('datos_meta.optimizacion') }}" class="dm-nav-enlace {{ 'dm-nav-activo' if request.endpoint == 'datos_meta.optimizacion' }}">Optimización</a>
+  <a href="{{ url_for('datos_meta.chat_pauta') }}" class="dm-nav-enlace {{ 'dm-nav-activo' if request.endpoint == 'datos_meta.chat_pauta' }}">Chat</a>
+  <a href="{{ url_for('datos_meta.informes_lista') }}" class="dm-nav-enlace {{ 'dm-nav-activo' if request.endpoint and request.endpoint.startswith('datos_meta.informes') }}">Informes</a>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="dm-nav-enlace dm-nav-ajustes {{ 'dm-nav-activo' if request.endpoint == 'datos_meta.conexiones' }}" title="Conexión, sincronización y herramientas avanzadas">⚙ Ajustes</a>
+</nav>

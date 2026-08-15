@@ -60,20 +60,28 @@ TIPOS_OPORTUNIDAD_POSITIVA = {
     "buen_rendimiento_poco_presupuesto", "mejora_significativa",
 }
 
-# CRITICO/ALTO -> "ALTA", MEDIO -> "MEDIA", BAJO/INFORMATIVO -> "BAJA"
-# (Paso 14, punto 7) -- una re-etiquetado de la escala de 5 niveles del
-# Paso 11 para la vista compacta del Centro de Control, no una escala
-# de severidad nueva.
+# CRITICO/ALTO -> "URGENTE", MEDIO -> "ATENCIÓN", BAJO/INFORMATIVO ->
+# "INFORMATIVO" (Paso 16, punto 12) -- un re-etiquetado de la escala de
+# 5 niveles del Paso 11 para la vista compacta del Centro de Control,
+# nunca una escala de severidad nueva. El texto (no solo el color)
+# distingue cada nivel para accesibilidad (Paso 16, punto 22).
 ETIQUETAS_SEVERIDAD_ALERTA = {
-    "critico": "ALTA", "alto": "ALTA", "medio": "MEDIA", "bajo": "BAJA", "informativo": "BAJA",
+    "critico": "URGENTE", "alto": "URGENTE", "medio": "ATENCIÓN", "bajo": "INFORMATIVO", "informativo": "INFORMATIVO",
 }
+
+# Cuantas alertas del MISMO tipo se muestran individualmente antes de
+# agruparlas en una sola tarjeta (Paso 16, punto 12: "no mostrar 20
+# alertas iguales") -- ninguna deteccion nueva, solo una regla de
+# presentacion sobre `recomendaciones` (que optimizacion.py ya
+# devuelve ordenada por prioridad).
+UMBRAL_AGRUPAR_ALERTAS = 4
 
 KPIS_TARJETAS_PRINCIPALES = ["spend", "resultados", "costo_por_resultado", "reach", "impressions", "roas"]
 
 KPIS_MEJOR_PEOR_DISPONIBLES = ["costo_por_resultado", "ctr", "cpc", "roas"]
 
-# Explicaciones en lenguaje sencillo (Paso 14, punto 17) -- solo para
-# los KPI que esta pantalla realmente muestra.
+# Explicaciones en lenguaje sencillo (Paso 14, punto 17 / Paso 16,
+# punto 11) -- solo para los KPI que esta pantalla realmente muestra.
 EXPLICACIONES_KPI = {
     "spend": "Cuánto has invertido en total en el período seleccionado.",
     "resultados": "Cuántas conversiones (compras, mensajes, registros, etc.) generaron tus anuncios.",
@@ -84,6 +92,21 @@ EXPLICACIONES_KPI = {
     "cpc": "Cuánto pagaste, en promedio, por cada clic.",
     "cpm": "Cuánto cuesta mostrar el anuncio 1.000 veces.",
     "roas": "Cuánto valor generaste por cada colón/dólar invertido.",
+}
+
+# Etiquetas "para niños" (Paso 16, punto 10): reemplazan el nombre
+# técnico como TÍTULO principal de la tarjeta -- el acrónimo (CTR/CPC/
+# CPM/ROAS) queda disponible atrás de "Ver detalle técnico" en vez de
+# ser lo primero que el usuario lee. Los KPI que ya tienen un nombre en
+# español sencillo (spend/resultados/costo_por_resultado/reach/
+# impressions) no necesitan una entrada aquí -- se usa ETIQUETAS_KPI tal
+# cual.
+ETIQUETAS_KPI_SENCILLAS = {
+    "ctr": "Personas que hicieron clic",
+    "cpc": "Costo por cada clic",
+    "cpm": "Costo por cada 1.000 personas que vieron tu anuncio",
+    "roas": "Retorno por cada colón invertido",
+    "frequency": "Veces que la misma persona vio tu anuncio",
 }
 
 
@@ -146,6 +169,15 @@ def _clasificar_estado_general(diagnostico_cuenta, cambios_temporales):
             frase = f"{len(deterioros)} {plural} deterioro significativo"
             partes.append(frase if not partes else frase[0].lower() + frase[1:])
         mensaje = (" y ".join(partes) + ".") if partes else "Se detectaron señales que requieren revisión."
+
+        # RENDIMIENTO BAJO vs. NECESITA ATENCIÓN (Paso 16, punto 4: 4
+        # niveles, no 3) -- la MISMA clasificacion critico/atencion que
+        # inteligencia.py ya calculo, mas cuantas campañas ya cayeron en
+        # deterioro real, deciden cual de los dos, nunca un umbral nuevo:
+        # "critico" en la cuenta completa, o 2+ campañas en deterioro, es
+        # mas severo que una sola señal aislada.
+        if clasificacion == "critico" or len(deterioros) >= 2:
+            return {"estado": "rendimiento_bajo", "titulo": "RENDIMIENTO BAJO", "mensaje": mensaje}
         return {"estado": "necesita_atencion", "titulo": "NECESITA ATENCIÓN", "mensaje": mensaje}
 
     return {
@@ -153,6 +185,50 @@ def _clasificar_estado_general(diagnostico_cuenta, cambios_temporales):
         "titulo": "BUEN RENDIMIENTO",
         "mensaje": "Las campañas están generando resultados a un costo estable o menor que el período anterior.",
     }
+
+
+_DESCRIPCION_TIPO_ALERTA = {
+    "costo_resultado_alto": "costo por resultado elevado",
+    "ctr_bajo": "CTR por debajo del promedio",
+    "frecuencia_elevada": "frecuencia elevada",
+    "gasto_alto_sin_resultados": "gasto alto sin resultados",
+    "gasto_alto_bajo_resultado": "gasto alto con resultados bajos",
+    "deterioro": "deterioro frente al período anterior",
+    "fatiga": "señales compatibles con fatiga",
+}
+
+
+def _agrupar_alertas(alertas):
+    """Agrupa alertas del MISMO tipo cuando hay mas de
+    UMBRAL_AGRUPAR_ALERTAS (Paso 16, punto 12: "no mostrar 20 alertas
+    iguales. Agrupar cuando sea posible") -- nunca oculta informacion:
+    el grupo conserva la lista completa en "items" para expandir. Los
+    tipos con pocas alertas se muestran individuales, sin envolver."""
+    por_tipo = {}
+    for a in alertas:
+        por_tipo.setdefault(a["tipo"], []).append(a)
+
+    resultado = []
+    for tipo, items in por_tipo.items():
+        if len(items) <= UMBRAL_AGRUPAR_ALERTAS:
+            resultado.extend(items)
+            continue
+        prioridad_grupo = min(items, key=lambda i: ["critico", "alto", "medio", "bajo", "informativo"].index(i["prioridad"]))["prioridad"]
+        descripcion = _DESCRIPCION_TIPO_ALERTA.get(tipo, tipo.replace("_", " "))
+        resultado.append({
+            "agrupado": True,
+            "tipo": tipo,
+            "prioridad": prioridad_grupo,
+            "severidad_etiqueta": ETIQUETAS_SEVERIDAD_ALERTA.get(prioridad_grupo, "INFORMATIVO"),
+            "entidad_nombre": f"{len(items)} campañas",
+            "que_paso": f"{len(items)} campañas con {descripcion}.",
+            "recomendacion": "Revisar cada una para decidir si necesitan la misma acción.",
+            "items": items,
+        })
+
+    orden = {"critico": 0, "alto": 1, "medio": 2, "bajo": 3, "informativo": 4}
+    resultado.sort(key=lambda r: orden.get(r["prioridad"], 99))
+    return resultado
 
 
 def _construir_presupuesto_centro_control(comparacion, analisis_presupuesto):
@@ -220,9 +296,10 @@ def construir_centro_control(empresa_id, cuenta_id, fecha_inicio, fecha_fin, tip
 
     recomendaciones = paquete_opt["recomendaciones"]
     oportunidades = [r for r in recomendaciones if r["tipo"] in TIPOS_OPORTUNIDAD_POSITIVA]
-    alertas = [r for r in recomendaciones if r["tipo"] not in TIPOS_OPORTUNIDAD_POSITIVA]
-    for a in alertas:
-        a["severidad_etiqueta"] = ETIQUETAS_SEVERIDAD_ALERTA.get(a["prioridad"], "BAJA")
+    alertas_individuales = [r for r in recomendaciones if r["tipo"] not in TIPOS_OPORTUNIDAD_POSITIVA]
+    for a in alertas_individuales:
+        a["severidad_etiqueta"] = ETIQUETAS_SEVERIDAD_ALERTA.get(a["prioridad"], "INFORMATIVO")
+    alertas = _agrupar_alertas(alertas_individuales)
 
     mejor, peor = _mejor_peor_por_kpi(paquete_opt["comparacion"], paquete_opt["dias_por_entidad"], paquete_opt["moneda"], kpi_mejor_peor)
 

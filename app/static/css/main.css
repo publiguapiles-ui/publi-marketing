@@ -6,6 +6,42 @@
   --color-texto: #1f2937;
   --color-borde: #d1d5db;
   --color-acento: #2563eb;
+
+  /* Sistema de significado (Paso 16, punto 5) -- estos 4 colores se
+     usan SIEMPRE con el mismo significado en toda Datos de Meta, nunca
+     como decoracion: verde = positivo/mejoro/oportunidad favorable,
+     amarillo = vigilar/revisar, rojo = problema/accion necesaria,
+     azul-neutro = informacion/navegacion. Los mismos valores que ya
+     usaban los badges/alertas de los Pasos 8-15 (dm-badge-*, opt-
+     badge-prioridad-*, acc-estado-*, cc-estado-*) -- este bloque solo
+     les pone nombre para que los componentes nuevos los reutilicen en
+     vez de inventar un tono distinto cada vez. */
+  --color-positivo: #16a34a;
+  --color-positivo-fondo: #f0fdf4;
+  --color-positivo-fondo-fuerte: #dcfce7;
+  --color-positivo-texto: #166534;
+
+  --color-vigilar: #f59e0b;
+  --color-vigilar-fondo: #fffbeb;
+  --color-vigilar-fondo-fuerte: #fef3c7;
+  --color-vigilar-texto: #92400e;
+
+  --color-problema: #dc2626;
+  --color-problema-fondo: #fef2f2;
+  --color-problema-fondo-fuerte: #fee2e2;
+  --color-problema-texto: #991b1b;
+
+  --color-neutro: #2563eb;
+  --color-neutro-fondo: #eff6ff;
+  --color-neutro-fondo-fuerte: #dbeafe;
+  --color-neutro-texto: #1e40af;
+
+  --color-gris-fondo: #f3f4f6;
+  --color-gris-texto: #4b5563;
+
+  /* Tamaño mínimo táctil (Paso 16, punto 22) para botones/enlaces
+     interactivos en móvil. */
+  --tamano-tactil-minimo: 44px;
 }
 
 * {
@@ -2101,6 +2137,24 @@ body {
   border-left-color: #9ca3af;
 }
 
+.dm-toggle-tecnico {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-neutro);
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.dm-kpi-etiqueta-tecnica {
+  display: none;
+}
+
+#cc-toggle-tecnico:checked ~ .dm-cards-kpi .dm-kpi-etiqueta-tecnica {
+  display: block;
+}
+
 .cc-kpi-explicacion {
   margin: 2px 0 0;
   font-size: 12px;
@@ -2141,11 +2195,22 @@ body {
 }
 
 .cc-claude-recomienda {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--color-neutro-fondo);
+  border: 1px solid var(--color-neutro-fondo-fuerte);
   border-radius: 8px;
-  padding: 16px 20px;
+  padding: 14px 18px;
   margin: 16px 0;
+}
+
+.cc-claude-titulo {
+  font-weight: 700;
+  color: var(--color-neutro-texto);
+  margin-bottom: 4px;
+}
+
+.cc-claude-lista {
+  margin: 6px 0 0;
+  padding-left: 20px;
 }
 
 .cc-claude-acciones {
@@ -2219,6 +2284,22 @@ body {
   color: #991b1b;
 }
 
+.inf-boton-favorito {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 6px;
+  min-width: var(--tamano-tactil-minimo);
+  min-height: var(--tamano-tactil-minimo);
+}
+
+.inf-favorito-activo {
+  color: var(--color-vigilar);
+}
+
 .inf-modo-barra {
   display: flex;
   gap: 8px;
@@ -2263,6 +2344,200 @@ body {
 .inf-diagnostico-grid h3 {
   font-size: 14px;
   margin-bottom: 6px;
+}
+
+/* ============================================================
+   Paso 16 — Diseño definitivo de Datos de Meta
+   ============================================================ */
+
+/* --- Navegación compartida (punto 2) -------------------------------- */
+
+.dm-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.dm-nav-enlace {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-texto);
+  text-decoration: none;
+  background: transparent;
+  min-height: var(--tamano-tactil-minimo);
+}
+
+.dm-nav-enlace:hover {
+  background: var(--color-gris-fondo);
+}
+
+.dm-nav-activo {
+  background: var(--color-neutro-fondo-fuerte);
+  color: var(--color-neutro-texto);
+  font-weight: 600;
+}
+
+.dm-nav-ajustes {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .dm-nav {
+    gap: 4px;
+  }
+  .dm-nav-enlace {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .dm-nav-ajustes {
+    margin-left: 0;
+  }
+}
+
+/* --- Estado general: 4 niveles (punto 4) ---------------------------- */
+
+.cc-estado-rendimiento_bajo {
+  background: var(--color-problema-fondo);
+  border-left-color: var(--color-problema);
+}
+
+/* --- Etiquetas de significado con texto + icono, nunca solo color
+   (punto 22: accesibilidad -- nunca depender solo del color) -------- */
+
+.dm-etiqueta-significado {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dm-etiqueta-positivo {
+  background: var(--color-positivo-fondo-fuerte);
+  color: var(--color-positivo-texto);
+}
+
+.dm-etiqueta-vigilar {
+  background: var(--color-vigilar-fondo-fuerte);
+  color: var(--color-vigilar-texto);
+}
+
+.dm-etiqueta-problema {
+  background: var(--color-problema-fondo-fuerte);
+  color: var(--color-problema-texto);
+}
+
+.dm-etiqueta-neutro {
+  background: var(--color-neutro-fondo-fuerte);
+  color: var(--color-neutro-texto);
+}
+
+/* --- KPI: etiqueta sencilla + detalle técnico opcional (puntos 6, 10, 11) */
+
+.dm-kpi-etiqueta-sencilla {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.dm-kpi-etiqueta-tecnica {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dm-detalle-tecnico summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-neutro);
+}
+
+/* --- Alertas agrupadas (punto 12) ----------------------------------- */
+
+.dm-alerta-grupo-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* --- Tablas responsive -> tarjetas en móvil (puntos 8, 18, 19, 23) --
+   Aplicar la clase `.dm-tabla-responsive` a cualquier <table> ya
+   existente (dm-tabla-kpi la incluye) para que, bajo 640px, cada FILA
+   se convierta en una tarjeta vertical con el nombre de columna como
+   etiqueta -- reutiliza el `data-etiqueta` que ya escriben las
+   plantillas via `{{ }}` en cada <td>, nunca duplica la tabla en
+   dos marcados distintos. Nunca provoca scroll horizontal. */
+
+@media (max-width: 640px) {
+  .dm-tabla-responsive,
+  .dm-tabla-responsive thead,
+  .dm-tabla-responsive tbody,
+  .dm-tabla-responsive th,
+  .dm-tabla-responsive td,
+  .dm-tabla-responsive tr {
+    display: block;
+  }
+
+  .dm-tabla-responsive thead {
+    position: absolute;
+    left: -9999px;
+    top: -9999px;
+  }
+
+  .dm-tabla-responsive tr {
+    margin-bottom: 12px;
+    border: 1px solid var(--color-borde);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #fff;
+  }
+
+  .dm-tabla-responsive td {
+    border: none;
+    padding: 4px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: right;
+  }
+
+  .dm-tabla-responsive td::before {
+    content: attr(data-etiqueta);
+    font-weight: 600;
+    color: #6b7280;
+    text-align: left;
+  }
+
+  .dm-tabla-responsive td:empty {
+    display: none;
+  }
+}
+
+/* --- Botones/enlaces táctiles (punto 22) ---------------------------- */
+
+@media (max-width: 640px) {
+  .boton-primario,
+  .boton-enlace {
+    min-height: var(--tamano-tactil-minimo);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 600px) {

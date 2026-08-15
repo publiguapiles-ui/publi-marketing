@@ -22,6 +22,25 @@
     });
   }
 
+  // --- Lista: alternar favorito (Paso 16, punto 16) -----------------------------------
+
+  document.querySelectorAll(".inf-boton-favorito").forEach((boton) => {
+    boton.addEventListener("click", async () => {
+      boton.disabled = true;
+      try {
+        const resp = await fetch(`/datos-meta/informes/${boton.dataset.informeId}/favorito`, { method: "POST" });
+        const datos = await resp.json();
+        if (datos.ok) {
+          window.location.reload();
+        } else {
+          boton.disabled = false;
+        }
+      } catch (err) {
+        boton.disabled = false;
+      }
+    });
+  });
+
   // --- Nuevo informe -----------------------------------------------------------------
 
   const formCuenta = document.getElementById("inf-form-cuenta");

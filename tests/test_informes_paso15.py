@@ -143,7 +143,11 @@ def test_informe_optimizacion_no_incluye_seccion_de_campanas(client, usuario_a_c
     assert resp.status_code == 200
     texto = resp.get_data(as_text=True)
     assert "Plan de acción" in texto or "Diagnóstico" in texto
-    assert "Campañas" not in texto  # el tipo "optimizacion" no incluye la tabla de campañas
+    # el tipo "optimizacion" no incluye la tabla de campañas -- se
+    # verifica que el nombre de la campaña (que solo aparece en esa
+    # tabla) esta ausente, no el texto "Campañas" en si (que ahora
+    # tambien aparece en la barra de navegacion compartida del Paso 16).
+    assert "Campaña Única" not in texto
 
 
 # --- Comparacion: periodo anterior / mismo periodo año anterior / sin comparacion ----------
@@ -302,6 +306,52 @@ def test_descargar_pdf_de_informe_sin_ninguna_campana_no_falla(client, usuario_a
     resp = client.get(f"/datos-meta/informes/{informe_id}/descargar")
     assert resp.status_code == 200
     assert resp.data[:5] == b"%PDF-"
+
+
+# --- Favoritos (Paso 16, punto 16) --------------------------------------------------------
+
+def test_alternar_favorito_marca_y_desmarca(client, usuario_a_con_empresa):
+    with client.application.app_context():
+        cuenta_id = _crear_cuenta(usuario_a_con_empresa["empresa_id"]).id
+
+    resp_crear = client.post("/datos-meta/informes/crear", json=_cuerpo_crear(cuenta_id))
+    informe_id = resp_crear.get_json()["informe_id"]
+
+    resp1 = client.post(f"/datos-meta/informes/{informe_id}/favorito")
+    assert resp1.status_code == 200
+    assert resp1.get_json() == {"ok": True, "favorito": True}
+
+    resp2 = client.post(f"/datos-meta/informes/{informe_id}/favorito")
+    assert resp2.get_json() == {"ok": True, "favorito": False}
+
+
+def test_favorito_aparece_en_su_propia_seccion_de_la_lista(client, usuario_a_con_empresa):
+    with client.application.app_context():
+        cuenta_id = _crear_cuenta(usuario_a_con_empresa["empresa_id"]).id
+
+    resp_crear = client.post("/datos-meta/informes/crear", json=_cuerpo_crear(cuenta_id))
+    informe_id = resp_crear.get_json()["informe_id"]
+    client.post(f"/datos-meta/informes/{informe_id}/favorito")
+
+    resp = client.get("/datos-meta/informes")
+    assert resp.status_code == 200
+    texto = resp.get_data(as_text=True)
+    assert "Informes favoritos" in texto
+    assert "Informes recientes" not in texto  # ya no quedan informes sin marcar
+
+
+def test_alternar_favorito_de_otra_empresa_da_error(client, usuario_a_con_empresa, usuario_b_con_empresa):
+    with client.application.app_context():
+        cuenta_id = _crear_cuenta(usuario_a_con_empresa["empresa_id"]).id
+
+    iniciar_sesion_de_prueba(client, usuario_a_con_empresa["usuario_id"], "a@example.com")
+    resp_crear = client.post("/datos-meta/informes/crear", json=_cuerpo_crear(cuenta_id))
+    informe_id = resp_crear.get_json()["informe_id"]
+
+    iniciar_sesion_de_prueba(client, usuario_b_con_empresa["usuario_id"], "b@example.com")
+    resp = client.post(f"/datos-meta/informes/{informe_id}/favorito")
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
 
 
 # --- Versiones: nunca sobrescribe -----------------------------------------------------------

@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block titulo %}Chat de Pauta · Datos de Meta{% endblock %}
 {% block contenido %}
+{% include "datos_meta/_nav.html" %}
+
 <div class="cabecera-seccion">
   <div>
     <h1>Chat de Pauta</h1>
     <p class="perfil-nota">Pregúntale en lenguaje natural sobre tus campañas, audiencias y KPI reales. No crea, modifica ni publica nada en Meta; toda propuesta requiere tu aprobación.</p>
   </div>
-  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
 </div>
 
 {% if not ia_configurada %}

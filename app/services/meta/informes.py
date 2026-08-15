@@ -509,6 +509,21 @@ def listar_informes_empresa(empresa_id, cuenta_id=None, tipo=None, limite=100):
     return consulta.order_by(InformePauta.creado_en.desc()).limit(limite).all()
 
 
+def alternar_favorito(empresa_id, informe_id):
+    """(informe_o_None, error_o_None). Marca/desmarca un informe como
+    favorito (Paso 16, punto 16) -- un simple booleano para agrupar el
+    historial, nunca una clasificacion calculada."""
+    informe = obtener_informe(empresa_id, informe_id)
+    if informe is None:
+        return None, "El informe no existe o no pertenece a esta empresa."
+
+    from app.extensions import db
+
+    informe.favorito = not informe.favorito
+    db.session.commit()
+    return informe, None
+
+
 def contenido_para_modo(contenido, modo):
     """Recorta `contenido` a las secciones permitidas en MODO CLIENTE
     (Paso 15, punto 14) -- nunca oculta datos en modo interno, y en

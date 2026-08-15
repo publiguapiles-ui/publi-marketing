@@ -142,8 +142,8 @@ def test_centro_control_reparte_oportunidad_como_positiva_no_como_alerta(client,
     resp = client.get(_url(cuenta_id=cuenta_id))
     assert resp.status_code == 200
     texto = resp.get_data(as_text=True)
-    assert "Oportunidades" in texto
-    assert "Alertas" in texto
+    assert "OPORTUNIDAD" in texto
+    assert "URGENTE" in texto or "ATENCIÓN" in texto or "INFORMATIVO" in texto
 
 
 # --- Mejor/peor segun el KPI seleccionado -------------------------------------------------
@@ -161,7 +161,8 @@ def test_centro_control_mejor_peor_respeta_kpi_seleccionado(client, usuario_a_co
     resp = client.get(_url(cuenta_id=cuenta_id, kpi_mejor_peor="ctr"))
     assert resp.status_code == 200
     texto = resp.get_data(as_text=True)
-    assert "Mejor y peor rendimiento" in texto
+    assert "Mejor rendimiento" in texto
+    assert "Peor rendimiento" in texto
     assert "Campaña Rápida" in texto  # mejor por CTR
 
 

@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block titulo %}Audiencias · Datos de Meta{% endblock %}
 {% block contenido %}
+{% include "datos_meta/_nav.html" %}
+
 <div class="cabecera-seccion">
   <div>
-    <h1>Datos de Meta</h1>
-    <p class="perfil-nota">Audiencias — separa lo configurado en cada conjunto de anuncios de lo que realmente produjo resultados.</p>
+    <h1>Audiencias</h1>
+    <p class="perfil-nota">Separa lo configurado en cada conjunto de anuncios de lo que realmente produjo resultados.</p>
   </div>
-  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
 </div>
 
 <form id="dm-filtros" class="formulario-simple dm-form-kpi" method="get">

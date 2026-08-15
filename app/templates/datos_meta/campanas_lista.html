@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block titulo %}Campañas · Datos de Meta{% endblock %}
 {% block contenido %}
+{% include "datos_meta/_nav.html" %}
+
 <div class="cabecera-seccion">
   <div>
-    <h1>Datos de Meta</h1>
-    <p class="perfil-nota">Campañas — histórico de activas, finalizadas y desactivadas. Selecciona una para ver su análisis.</p>
+    <h1>Campañas</h1>
+    <p class="perfil-nota">Histórico de activas, finalizadas y desactivadas. Selecciona una para ver su análisis.</p>
   </div>
-  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
 </div>
 
 <form class="formulario-simple dm-form-kpi" method="get">
@@ -48,29 +49,29 @@
 <div class="estado-vacio"><p>Ninguna campaña para el estado seleccionado.</p></div>
 {% else %}
 <div class="dm-tabla-scroll">
-<table class="dm-tabla-kpi">
+<table class="dm-tabla-kpi dm-tabla-responsive">
   <thead>
     <tr>
-      <th>Campaña</th><th>Estado</th><th>Objetivo</th><th>Inversión</th><th>Resultados</th>
-      <th>Costo por resultado</th><th>CTR</th><th>ROAS</th><th>Rendimiento</th><th></th>
+      <th>Campaña</th><th>Estado</th><th>Resultados</th><th>Costo/Resultado</th><th>Inversión</th>
+      <th>Objetivo</th><th>CTR</th><th>ROAS</th><th>Rendimiento</th><th></th>
     </tr>
   </thead>
   <tbody>
     {% for fila in comparacion %}
     <tr>
-      <td>{{ fila.entidad.nombre or fila.entidad.id_externo }}</td>
-      <td>{{ fila.entidad.estado or "—" }}</td>
-      <td>{{ (fila.entidad.atributos or {}).get("objetivo") or "—" }}</td>
-      <td>{{ fila.kpis.spend if fila.kpis.spend is not none else "No disponible" }}</td>
-      <td>{{ fila.kpis.resultados if fila.kpis.resultados is not none else "No disponible" }}</td>
-      <td>{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else "No disponible" }}</td>
-      <td>{{ fila.kpis.ctr if fila.kpis.ctr is not none else "No disponible" }}</td>
-      <td>{{ fila.kpis.roas if fila.kpis.roas is not none else "No disponible" }}</td>
-      <td>
-        {% if fila.es_mejor %}<span class="dm-badge-mejor">Mejor</span>{% endif %}
-        {% if fila.es_peor %}<span class="dm-badge-peor">Peor</span>{% endif %}
+      <td data-etiqueta="Campaña">{{ fila.entidad.nombre or fila.entidad.id_externo }}</td>
+      <td data-etiqueta="Estado">{{ fila.entidad.estado or "—" }}</td>
+      <td data-etiqueta="Resultados">{{ fila.kpis.resultados if fila.kpis.resultados is not none else "No disponible" }}</td>
+      <td data-etiqueta="Costo/Resultado">{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+      <td data-etiqueta="Inversión">{{ fila.kpis.spend if fila.kpis.spend is not none else "No disponible" }}</td>
+      <td data-etiqueta="Objetivo">{{ (fila.entidad.atributos or {}).get("objetivo") or "—" }}</td>
+      <td data-etiqueta="CTR">{{ fila.kpis.ctr if fila.kpis.ctr is not none else "No disponible" }}</td>
+      <td data-etiqueta="ROAS">{{ fila.kpis.roas if fila.kpis.roas is not none else "No disponible" }}</td>
+      <td data-etiqueta="Rendimiento">
+        {% if fila.es_mejor %}<span class="dm-etiqueta-significado dm-etiqueta-positivo">↑ Mejor</span>{% endif %}
+        {% if fila.es_peor %}<span class="dm-etiqueta-significado dm-etiqueta-problema">↓ Peor</span>{% endif %}
       </td>
-      <td><a href="{{ url_for('datos_meta.campana_detalle', campana_id=fila.entidad.id, periodo=periodo_clave) }}" class="boton-enlace">Análisis →</a></td>
+      <td data-etiqueta=""><a href="{{ url_for('datos_meta.campana_detalle', campana_id=fila.entidad.id, periodo=periodo_clave) }}" class="boton-enlace">Análisis →</a></td>
     </tr>
     {% endfor %}
   </tbody>

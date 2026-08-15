@@ -69,6 +69,7 @@ from app.services.meta.inteligencia import construir_inteligencia
 from app.services.meta.optimizacion import construir_centro_optimizacion
 from app.services.meta.centro_control import (
     EXPLICACIONES_KPI,
+    ETIQUETAS_KPI_SENCILLAS,
     KPIS_MEJOR_PEOR_DISPONIBLES,
     KPIS_TARJETAS_PRINCIPALES,
     construir_centro_control,
@@ -76,6 +77,7 @@ from app.services.meta.centro_control import (
 from app.services.meta.informes import (
     SECCIONES_MODO_CLIENTE,
     TITULOS_TIPO,
+    alternar_favorito,
     contenido_para_modo,
     crear_informe,
     listar_informes_empresa,
@@ -1851,6 +1853,8 @@ def informes_lista():
         tipo_filtro = None
 
     informes = listar_informes_empresa(empresa.id, cuenta_id=cuenta_id, tipo=tipo_filtro)
+    favoritos = [i for i in informes if i.favorito]
+    recientes = [i for i in informes if not i.favorito]
 
     return render_template(
         "datos_meta/informes_lista.html",
@@ -1861,7 +1865,19 @@ def informes_lista():
         tipos_informe=TIPOS_INFORME_PAUTA,
         etiquetas_tipo=ETIQUETAS_TIPO_INFORME,
         informes=informes,
+        favoritos=favoritos,
+        recientes=recientes,
     )
+
+
+@datos_meta_bp.post("/informes/<int:informe_id>/favorito")
+@login_required
+def informes_alternar_favorito(informe_id):
+    empresa, _rol = _empresa_activa_o_404()
+    informe, error = alternar_favorito(empresa.id, informe_id)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "favorito": informe.favorito})
 
 
 @datos_meta_bp.get("/informes/nuevo")
@@ -2066,9 +2082,12 @@ def _construir_tarjetas_kpi_centro_control(datos):
             if variacion is not None and variacion != 0:
                 menor_es_mejor = clave in METRICAS_MENOR_ES_MEJOR
                 es_mejora = (variacion < 0) if menor_es_mejor else (variacion > 0)
+        etiqueta_tecnica = ETIQUETAS_KPI.get(clave, clave)
+        etiqueta_sencilla = ETIQUETAS_KPI_SENCILLAS.get(clave, etiqueta_tecnica)
         tarjetas.append({
             "clave": clave,
-            "etiqueta": ETIQUETAS_KPI.get(clave, clave),
+            "etiqueta": etiqueta_sencilla,
+            "etiqueta_tecnica": etiqueta_tecnica if etiqueta_tecnica != etiqueta_sencilla else None,
             "valor": valor,
             "anterior": anterior,
             "variacion_pct": variacion,

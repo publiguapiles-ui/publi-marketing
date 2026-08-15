@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block titulo %}Centro de Control · Datos de Meta{% endblock %}
 {% block contenido %}
+{% include "datos_meta/_nav.html" %}
+
 <div class="cabecera-seccion">
   <div>
     <h1>Centro de Control de Pauta</h1>
-    <p class="perfil-nota">Todo lo que ya sabemos de tu pauta, en una sola pantalla. No es un motor de análisis nuevo: reutiliza Optimización, Inteligencia, Presupuesto y Acciones.</p>
+    <p class="perfil-nota">¿Cómo está mi pauta? Qué funcionó, qué falló, por qué, y qué hacer al respecto — en una sola pantalla.</p>
   </div>
-  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
 </div>
 
 <form method="get" id="cc-filtros" class="formulario-simple dm-form-kpi">
@@ -51,42 +52,39 @@
   <button type="submit" class="boton-primario">Aplicar</button>
 </form>
 
-{% if acciones_pendientes_total > 0 %}
-<div class="dm-alerta dm-alerta-atencion cc-acciones-pendientes">
-  <p><strong>{{ acciones_pendientes_total }}</strong> acción{{ "es" if acciones_pendientes_total != 1 else "" }} pendiente{{ "s" if acciones_pendientes_total != 1 else "" }} de aprobación.
-    <a href="{{ url_for('datos_meta.acciones_lista', estado='pendiente_de_aprobacion') }}" class="boton-enlace">Revisar</a>
-  </p>
-</div>
-{% endif %}
-
 {% if error %}
 <div class="estado-vacio"><p>{{ error }}</p></div>
 {% elif not seleccion.cuenta_id %}
 <div class="estado-vacio"><p>Selecciona una cuenta publicitaria para ver el Centro de Control.</p></div>
 {% else %}
 
+{# 4. Estado general (Paso 16, punto 4) — lo primero que se lee #}
 <section class="cc-estado-general cc-estado-{{ datos.estado_general.estado }}">
   <h2>{{ datos.estado_general.titulo }}</h2>
   <p>{{ datos.estado_general.mensaje }}</p>
 </section>
 
+{# 5. KPI principales (puntos 1, 6, 10, 11: dato → significado, lenguaje sencillo con detalle técnico opcional) #}
 <section>
   <div class="cc-seccion-cabecera">
-    <h2 class="ps-seccion-titulo">Resumen principal</h2>
+    <h2 class="ps-seccion-titulo">¿Cuánto invertimos y qué conseguimos?</h2>
     <a href="{{ url_for('datos_meta.kpi_prueba', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Ver todos los KPI</a>
   </div>
   {% if datos.tarjetas_kpi %}
+  <label class="dm-toggle-tecnico"><input type="checkbox" id="cc-toggle-tecnico" /> Ver detalle técnico</label>
   <div class="dm-cards-kpi">
     {% for t in datos.tarjetas_kpi %}
     <div class="dm-card-kpi">
-      <div class="dm-card-kpi-etiqueta">{{ t.etiqueta }}</div>
+      <div class="dm-kpi-etiqueta-sencilla">{{ t.etiqueta }}</div>
+      {% if t.etiqueta_tecnica %}<div class="dm-kpi-etiqueta-tecnica">{{ t.etiqueta_tecnica }}</div>{% endif %}
       <div class="dm-card-kpi-valor">{{ t.valor }}{{ "%" if t.clave == "ctr" else "" }}</div>
       {% if t.explicacion %}<p class="perfil-nota cc-kpi-explicacion">{{ t.explicacion }}</p>{% endif %}
       {% if datos.comparacion_periodos and t.variacion_pct is not none %}
       <div class="dm-card-kpi-comparacion">
         {% if t.es_mejora is none %}<span>Sin cambio</span>
-        {% elif t.es_mejora %}<span class="dm-variacion-positiva">↑ {{ t.variacion_pct }}% — Mejor que el período anterior</span>
-        {% else %}<span class="dm-variacion-negativa">↓ {{ t.variacion_pct }}% — Peor que el período anterior</span>{% endif %}
+        {% elif t.es_mejora %}<span class="dm-etiqueta-significado dm-etiqueta-positivo">↑ {{ t.variacion_pct }}% Mejor</span>
+        {% else %}<span class="dm-etiqueta-significado dm-etiqueta-problema">↓ {{ t.variacion_pct }}% Peor</span>{% endif %}
+        <span class="perfil-nota"> vs. período anterior</span>
       </div>
       {% endif %}
     </div>
@@ -97,27 +95,39 @@
   {% endif %}
 </section>
 
+{# 6. Alertas (punto 12: URGENTE/ATENCIÓN/INFORMATIVO, agrupadas) #}
 <section>
-  <h2 class="ps-seccion-titulo">Alertas</h2>
+  <h2 class="ps-seccion-titulo">¿Qué requiere atención?</h2>
   {% if datos.alertas %}
   <div class="opt-lista-recomendaciones">
     {% for a in datos.alertas %}
     <div class="opt-recomendacion opt-recomendacion-{{ a.prioridad }}">
       <div class="opt-recomendacion-cabecera">
-        <span class="opt-badge-prioridad opt-badge-prioridad-{{ a.prioridad }}">{{ a.severidad_etiqueta or a.prioridad.upper() }}</span>
+        <span class="dm-etiqueta-significado {{ 'dm-etiqueta-problema' if a.severidad_etiqueta == 'URGENTE' else ('dm-etiqueta-vigilar' if a.severidad_etiqueta == 'ATENCIÓN' else 'dm-etiqueta-neutro') }}">{{ a.severidad_etiqueta }}</span>
         <strong>{{ a.entidad_nombre }}</strong>
       </div>
       <dl class="opt-recomendacion-detalle">
         <dt>Qué pasó</dt><dd>{{ a.que_paso }}</dd>
         <dt>Qué recomendamos</dt><dd>{{ a.recomendacion }}</dd>
       </dl>
+      {% if a.agrupado %}
+      <details>
+        <summary class="dm-alerta-grupo-cabecera">Ver las {{ a.items | length }} campañas</summary>
+        <ul class="lista-simple">
+          {% for item in a.items %}
+          <li>{{ item.entidad_nombre }}: {{ item.que_paso }}</li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% else %}
       <div class="opt-recomendacion-acciones">
         {% if a.entidad_id %}
-        <a href="{{ url_for('datos_meta.campana_detalle', campana_id=a.entidad_id) }}" class="boton-enlace">Ver</a>
+        <a href="{{ url_for('datos_meta.campana_detalle', campana_id=a.entidad_id) }}" class="boton-enlace">Ver por qué</a>
         {% else %}
-        <a href="{{ url_for('datos_meta.inteligencia', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Ver</a>
+        <a href="{{ url_for('datos_meta.inteligencia', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Ver por qué</a>
         {% endif %}
       </div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
@@ -126,72 +136,67 @@
   {% endif %}
 </section>
 
+{# 7. Campañas (punto 8: nombre/estado/resultados/costo/tendencia primero) + mejor/peor #}
 <section>
-  <h2 class="ps-seccion-titulo">Campañas</h2>
+  <h2 class="ps-seccion-titulo">¿Qué campañas funcionan?</h2>
   {% if datos.campanas %}
   <div class="dm-tabla-scroll">
-    <table class="dm-tabla-kpi">
+    <table class="dm-tabla-kpi dm-tabla-responsive">
       <thead>
-        <tr><th>Campaña</th><th>Estado</th><th>Inversión</th><th>Resultados</th><th>Costo/Resultado</th><th>CTR</th><th>ROAS</th><th>Tendencia</th><th></th></tr>
+        <tr><th>Campaña</th><th>Estado</th><th>Resultados</th><th>Costo/Resultado</th><th>Inversión</th><th>CTR</th><th>ROAS</th><th>Tendencia</th><th></th></tr>
       </thead>
       <tbody>
         {% for c in datos.campanas %}
         <tr>
-          <td>{{ c.nombre }}</td>
-          <td>{{ c.estado or "—" }}</td>
-          <td>{{ c.kpis.spend if c.kpis.spend is not none else "No disponible" }}</td>
-          <td>{{ c.kpis.resultados if c.kpis.resultados is not none else "No disponible" }}</td>
-          <td>{{ c.kpis.costo_por_resultado if c.kpis.costo_por_resultado is not none else "No disponible" }}</td>
-          <td>{{ (c.kpis.ctr ~ "%") if c.kpis.ctr is not none else "No disponible" }}</td>
-          <td>{{ c.kpis.roas if c.kpis.roas is not none else "No disponible" }}</td>
-          <td>
-            {% if c.veredicto_temporal == "mejora_significativa" %}<span class="dm-badge-mejor">↑</span>
-            {% elif c.veredicto_temporal == "deterioro" %}<span class="dm-badge-peor">↓</span>
-            {% else %}<span class="dm-badge-neutro">→</span>{% endif %}
+          <td data-etiqueta="Campaña">{{ c.nombre }}</td>
+          <td data-etiqueta="Estado">{{ c.estado or "—" }}</td>
+          <td data-etiqueta="Resultados">{{ c.kpis.resultados if c.kpis.resultados is not none else "No disponible" }}</td>
+          <td data-etiqueta="Costo/Resultado">{{ c.kpis.costo_por_resultado if c.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+          <td data-etiqueta="Inversión">{{ c.kpis.spend if c.kpis.spend is not none else "No disponible" }}</td>
+          <td data-etiqueta="CTR">{{ (c.kpis.ctr ~ "%") if c.kpis.ctr is not none else "No disponible" }}</td>
+          <td data-etiqueta="ROAS">{{ c.kpis.roas if c.kpis.roas is not none else "No disponible" }}</td>
+          <td data-etiqueta="Tendencia">
+            {% if c.veredicto_temporal == "mejora_significativa" %}<span class="dm-etiqueta-significado dm-etiqueta-positivo">↑ Mejoró</span>
+            {% elif c.veredicto_temporal == "deterioro" %}<span class="dm-etiqueta-significado dm-etiqueta-problema">↓ Empeoró</span>
+            {% else %}<span class="dm-etiqueta-significado dm-etiqueta-neutro">→ Sin cambio</span>{% endif %}
           </td>
-          <td><a href="{{ url_for('datos_meta.campana_detalle', campana_id=c.id) }}" class="boton-enlace">Ver campaña</a></td>
+          <td data-etiqueta=""><a href="{{ url_for('datos_meta.campana_detalle', campana_id=c.id) }}" class="boton-enlace">Ver campaña</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
+
+  <div class="cc-mejor-peor-grid">
+    <div class="cc-mejor-peor-card cc-mejor">
+      <div class="cc-mejor-peor-titulo">Mejor rendimiento — {{ datos.etiquetas_kpi[datos.kpi_mejor_peor] }}</div>
+      {% if datos.mejor %}<strong>{{ datos.mejor.nombre }}</strong><div>{{ datos.mejor.valor }}</div>{% else %}<p class="perfil-nota">Datos insuficientes para comparar.</p>{% endif %}
+    </div>
+    <div class="cc-mejor-peor-card cc-peor">
+      <div class="cc-mejor-peor-titulo">Peor rendimiento — {{ datos.etiquetas_kpi[datos.kpi_mejor_peor] }}</div>
+      {% if datos.peor %}<strong>{{ datos.peor.nombre }}</strong><div>{{ datos.peor.valor }}</div>{% else %}<p class="perfil-nota">Datos insuficientes para comparar, o solo hay una campaña con volumen suficiente.</p>{% endif %}
+    </div>
   </div>
   {% else %}
   <p class="perfil-nota">No hay campañas sincronizadas para este período.</p>
   {% endif %}
 </section>
 
+{# 8. Oportunidades #}
 <section>
-  <h2 class="ps-seccion-titulo">Mejor y peor rendimiento — {{ datos.etiquetas_kpi[datos.kpi_mejor_peor] }}</h2>
-  {% if datos.mejor or datos.peor %}
-  <div class="cc-mejor-peor-grid">
-    <div class="cc-mejor-peor-card cc-mejor">
-      <div class="cc-mejor-peor-titulo">Mejor rendimiento</div>
-      {% if datos.mejor %}<strong>{{ datos.mejor.nombre }}</strong><div>{{ datos.mejor.valor }}</div>{% else %}<p class="perfil-nota">Datos insuficientes para comparar.</p>{% endif %}
-    </div>
-    <div class="cc-mejor-peor-card cc-peor">
-      <div class="cc-mejor-peor-titulo">Peor rendimiento</div>
-      {% if datos.peor %}<strong>{{ datos.peor.nombre }}</strong><div>{{ datos.peor.valor }}</div>{% else %}<p class="perfil-nota">Datos insuficientes para comparar, o solo hay una campaña con volumen suficiente.</p>{% endif %}
-    </div>
-  </div>
-  {% else %}
-  <p class="perfil-nota">Ninguna campaña tiene todavía volumen suficiente de datos para esta comparación.</p>
-  {% endif %}
-</section>
-
-<section>
-  <h2 class="ps-seccion-titulo">Oportunidades</h2>
+  <h2 class="ps-seccion-titulo">¿Qué oportunidades tengo?</h2>
   {% if datos.oportunidades %}
   <div class="opt-lista-recomendaciones">
     {% for o in datos.oportunidades %}
     <div class="opt-recomendacion opt-recomendacion-{{ o.prioridad }}">
       <div class="opt-recomendacion-cabecera">
-        <span class="opt-badge-prioridad opt-badge-prioridad-{{ o.prioridad }}">{{ o.prioridad.upper() }}</span>
+        <span class="dm-etiqueta-significado dm-etiqueta-positivo">OPORTUNIDAD</span>
         <strong>{{ o.entidad_nombre }}</strong>
       </div>
       <dl class="opt-recomendacion-detalle">
         <dt>Qué detectamos</dt><dd>{{ o.que_paso }}</dd>
-        {% if o.por_que_importa %}<dt>Por qué importa</dt><dd>{{ o.por_que_importa }}</dd>{% endif %}
-        <dt>Qué recomendamos</dt><dd>{{ o.recomendacion }}</dd>
+        {% if o.por_que_importa %}<dt>Por qué</dt><dd>{{ o.por_que_importa }}</dd>{% endif %}
+        <dt>Qué evaluar</dt><dd>{{ o.recomendacion }}</dd>
       </dl>
       <div class="opt-recomendacion-acciones">
         <a href="{{ url_for('datos_meta.optimizacion', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Analizar</a>
@@ -204,18 +209,17 @@
   {% endif %}
 </section>
 
-<section>
-  <h2 class="ps-seccion-titulo">Evolución de la pauta</h2>
-  <div id="cc-graficos" class="dm-graficos-grid"></div>
-</section>
-
+{# 9. Recomendación de Claude (punto 14: presencia clara, sin dominar la pantalla) #}
 {% if datos.recomendacion_claude %}
 <section class="cc-claude-recomienda">
-  <h2 class="ps-seccion-titulo">Claude recomienda</h2>
-  <p>Yo revisaría primero <strong>{{ datos.recomendacion_claude.entidad_nombre }}</strong> — {{ datos.recomendacion_claude.que_paso }} {{ datos.recomendacion_claude.recomendacion }}</p>
+  <div class="cc-claude-titulo">✦ Claude analizó tu pauta</div>
+  <p>Encontré algo que revisaría hoy:</p>
+  <ol class="cc-claude-lista">
+    <li><strong>{{ datos.recomendacion_claude.entidad_nombre }}</strong> — {{ datos.recomendacion_claude.que_paso }} {{ datos.recomendacion_claude.recomendacion }}</li>
+  </ol>
   <div class="cc-claude-acciones">
-    <a href="{{ url_for('datos_meta.optimizacion', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Ver análisis</a>
-    <a href="{{ url_for('datos_meta.chat_pauta', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Abrir chat</a>
+    <a href="{{ url_for('datos_meta.optimizacion', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Abrir análisis</a>
+    <a href="{{ url_for('datos_meta.chat_pauta', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Hablar con Claude</a>
     {% if datos.recomendacion_claude.entidad_id %}
     <a href="{{ url_for('datos_meta.acciones_lista', entidad_id=datos.recomendacion_claude.entidad_id, motivo=datos.recomendacion_claude.que_paso) }}" class="boton-enlace">Preparar acción</a>
     {% endif %}
@@ -223,6 +227,22 @@
 </section>
 {% endif %}
 
+{# 10. Gráficos #}
+<section>
+  <h2 class="ps-seccion-titulo">¿Cómo ha evolucionado la pauta?</h2>
+  <div id="cc-graficos" class="dm-graficos-grid"></div>
+</section>
+
+{# 11. Acciones pendientes #}
+{% if acciones_pendientes_total > 0 %}
+<section class="dm-alerta dm-alerta-atencion cc-acciones-pendientes">
+  <p><strong>{{ acciones_pendientes_total }}</strong> acción{{ "es" if acciones_pendientes_total != 1 else "" }} pendiente{{ "s" if acciones_pendientes_total != 1 else "" }} de aprobación.
+    <a href="{{ url_for('datos_meta.acciones_lista', estado='pendiente_de_aprobacion') }}" class="boton-enlace">Revisar</a>
+  </p>
+</section>
+{% endif %}
+
+{# Información secundaria: presupuesto, navegación rápida, glosario #}
 <section>
   <h2 class="ps-seccion-titulo">Presupuesto</h2>
   {% if datos.presupuesto.principal %}
@@ -249,11 +269,8 @@
 <section>
   <h2 class="ps-seccion-titulo">Ir a</h2>
   <div class="cc-nav-rapida">
-    <a href="{{ url_for('datos_meta.campanas_lista', cuenta_id=seleccion.cuenta_id) }}" class="boton-enlace">Campañas</a>
     <a href="{{ url_for('datos_meta.audiencias', cuenta_id=seleccion.cuenta_id) }}" class="boton-enlace">Audiencias</a>
-    <a href="{{ url_for('datos_meta.optimizacion', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Optimización</a>
     <a href="{{ url_for('datos_meta.acciones_lista') }}" class="boton-enlace">Acciones</a>
-    <a href="{{ url_for('datos_meta.chat_pauta', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-enlace">Chat de Pauta</a>
     <a href="{{ url_for('datos_meta.informes_lista', cuenta_id=seleccion.cuenta_id) }}" class="boton-enlace">Informes</a>
   </div>
 </section>

@@ -1,14 +1,15 @@
 {% extends "base.html" %}
 {% block titulo %}Informes · Datos de Meta{% endblock %}
 {% block contenido %}
+{% include "datos_meta/_nav.html" %}
+
 <div class="cabecera-seccion">
   <div>
     <h1>Informes de Pauta</h1>
-    <p class="perfil-nota">Historial de informes generados. Cada informe es una fotografía de los datos en el momento en que se creó — volver a generarlo crea una nueva versión, nunca sobrescribe la anterior.</p>
+    <p class="perfil-nota">Cada informe es una fotografía de los datos en el momento en que se creó — volver a generarlo crea una nueva versión, nunca sobrescribe la anterior.</p>
   </div>
   <div>
     <a href="{{ url_for('datos_meta.informes_nuevo', cuenta_id=cuenta_id) }}" class="boton-primario">Nuevo informe</a>
-    <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
   </div>
 </div>
 
@@ -34,35 +35,47 @@
   <button type="submit" class="boton-primario">Filtrar</button>
 </form>
 
-{% if informes %}
-<div class="dm-tabla-scroll">
-  <table class="dm-tabla-kpi">
-    <thead>
-      <tr><th>Informe</th><th>Tipo</th><th>Cuenta</th><th>Período</th><th>Versión</th><th>Estado</th><th>Generado</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for informe in informes %}
-      <tr>
-        <td>{{ informe.titulo }}</td>
-        <td>{{ etiquetas_tipo[informe.tipo] }}</td>
-        <td>{{ informe.cuenta_publicitaria.nombre or informe.cuenta_publicitaria.id_externo }}</td>
-        <td>{{ informe.fecha_inicio.isoformat() }} — {{ informe.fecha_fin.isoformat() }}</td>
-        <td>#{{ informe.version }}</td>
-        <td><span class="inf-estado inf-estado-{{ informe.estado }}">{{ "Listo" if informe.estado == "listo" else "Error" }}</span></td>
-        <td>{{ informe.creado_en.strftime("%d/%m/%Y %H:%M") }}</td>
-        <td>
-          <a href="{{ url_for('datos_meta.informes_detalle', informe_id=informe.id) }}" class="boton-enlace">Ver</a>
-          {% if informe.estado == "listo" %}
-          <a href="{{ url_for('datos_meta.informes_descargar_pdf', informe_id=informe.id) }}" class="boton-enlace">Descargar</a>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
+{% if not informes %}
 <div class="estado-vacio"><p>Todavía no se ha generado ningún informe{% if cuenta_id or tipo_filtro %} con estos filtros{% endif %}.</p></div>
+{% else %}
+
+{% for titulo_grupo, lista in [("Informes favoritos", favoritos), ("Informes recientes", recientes)] %}
+{% if lista %}
+<section>
+  <h2 class="ps-seccion-titulo">{{ titulo_grupo }}</h2>
+  <div class="dm-tabla-scroll">
+    <table class="dm-tabla-kpi dm-tabla-responsive">
+      <thead>
+        <tr><th></th><th>Informe</th><th>Tipo</th><th>Cuenta</th><th>Período</th><th>Versión</th><th>Estado</th><th>Generado</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for informe in lista %}
+        <tr>
+          <td data-etiqueta="">
+            <button type="button" class="inf-boton-favorito {{ 'inf-favorito-activo' if informe.favorito }}" data-informe-id="{{ informe.id }}" aria-label="{{ 'Quitar de favoritos' if informe.favorito else 'Marcar como favorito' }}" title="{{ 'Quitar de favoritos' if informe.favorito else 'Marcar como favorito' }}">{{ "★" if informe.favorito else "☆" }}</button>
+          </td>
+          <td data-etiqueta="Informe">{{ informe.titulo }}</td>
+          <td data-etiqueta="Tipo">{{ etiquetas_tipo[informe.tipo] }}</td>
+          <td data-etiqueta="Cuenta">{{ informe.cuenta_publicitaria.nombre or informe.cuenta_publicitaria.id_externo }}</td>
+          <td data-etiqueta="Período">{{ informe.fecha_inicio.isoformat() }} — {{ informe.fecha_fin.isoformat() }}</td>
+          <td data-etiqueta="Versión">#{{ informe.version }}</td>
+          <td data-etiqueta="Estado"><span class="inf-estado inf-estado-{{ informe.estado }}">{{ "Listo" if informe.estado == "listo" else "Error" }}</span></td>
+          <td data-etiqueta="Generado">{{ informe.creado_en.strftime("%d/%m/%Y %H:%M") }}</td>
+          <td data-etiqueta="">
+            <a href="{{ url_for('datos_meta.informes_detalle', informe_id=informe.id) }}" class="boton-enlace">Ver</a>
+            {% if informe.estado == "listo" %}
+            <a href="{{ url_for('datos_meta.informes_descargar_pdf', informe_id=informe.id) }}" class="boton-enlace">Descargar</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endfor %}
+
 {% endif %}
 
 <script src="{{ url_for('static', filename='js/datos_meta_informes.js') }}"></script>

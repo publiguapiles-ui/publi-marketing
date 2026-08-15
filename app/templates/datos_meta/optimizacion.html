@@ -1,17 +1,18 @@
 {% extends "base.html" %}
 {% block titulo %}Optimización · Datos de Meta{% endblock %}
 {% block contenido %}
+{% include "datos_meta/_nav.html" %}
+
 <div class="cabecera-seccion">
   <div>
-    <h1>Datos de Meta</h1>
-    <p class="perfil-nota">Optimización — compara, detecta señales y prioriza qué revisar primero, con la evidencia real detrás de cada recomendación. Nunca modifica ni ejecuta nada en Meta.</p>
+    <h1>Optimización</h1>
+    <p class="perfil-nota">Compara, detecta señales y prioriza qué revisar primero, con la evidencia real detrás de cada recomendación. Nunca modifica ni ejecuta nada en Meta.</p>
   </div>
+  {% if seleccion.cuenta_id %}
   <div>
-    {% if seleccion.cuenta_id %}
     <a href="{{ url_for('estratega_ia.index', cuenta_id=seleccion.cuenta_id, periodo=periodo_clave) }}" class="boton-primario">Solicitar análisis de Claude</a>
-    {% endif %}
-    <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Conexiones</a>
   </div>
+  {% endif %}
 </div>
 
 <form method="get" id="opt-filtros" class="formulario-simple dm-form-kpi">
@@ -66,36 +67,36 @@
 </h2>
 {% if datos.comparacion %}
 <div class="dm-tabla-scroll">
-<table class="dm-tabla-kpi" id="opt-tabla-comparacion">
+<table class="dm-tabla-kpi dm-tabla-responsive" id="opt-tabla-comparacion">
   <thead>
     <tr>
-      <th></th><th>Nombre</th><th>Gasto</th><th>Resultados</th><th>Costo por resultado</th><th>CTR</th><th>Veredicto</th><th>Vs. período anterior</th><th></th><th>Acciones</th>
+      <th></th><th>Nombre</th><th>Resultados</th><th>Costo por resultado</th><th>Gasto</th><th>CTR</th><th>Veredicto</th><th>Vs. período anterior</th><th></th><th>Acciones</th>
     </tr>
   </thead>
   <tbody>
     {% for fila in datos.comparacion %}
     <tr>
-      <td><input type="checkbox" class="opt-check-comparar" data-nombre="{{ fila.nombre }}" data-costo="{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else '' }}" /></td>
-      <td>{{ fila.nombre }}</td>
-      <td>{{ fila.kpis.spend if fila.kpis.spend is not none else "No disponible" }}</td>
-      <td>{{ fila.kpis.resultados if fila.kpis.resultados is not none else "No disponible" }}</td>
-      <td>{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else "No disponible" }}</td>
-      <td>{{ fila.kpis.ctr ~ "%" if fila.kpis.ctr is not none else "No disponible" }}</td>
-      <td>
-        {% if fila.es_mejor %}<span class="dm-badge-mejor">Mejor</span>{% endif %}
-        {% if fila.es_peor %}<span class="dm-badge-peor">Peor</span>{% endif %}
+      <td data-etiqueta="Comparar"><input type="checkbox" class="opt-check-comparar" data-nombre="{{ fila.nombre }}" data-costo="{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else '' }}" /></td>
+      <td data-etiqueta="Nombre">{{ fila.nombre }}</td>
+      <td data-etiqueta="Resultados">{{ fila.kpis.resultados if fila.kpis.resultados is not none else "No disponible" }}</td>
+      <td data-etiqueta="Costo por resultado">{{ fila.kpis.costo_por_resultado if fila.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+      <td data-etiqueta="Gasto">{{ fila.kpis.spend if fila.kpis.spend is not none else "No disponible" }}</td>
+      <td data-etiqueta="CTR">{{ fila.kpis.ctr ~ "%" if fila.kpis.ctr is not none else "No disponible" }}</td>
+      <td data-etiqueta="Veredicto">
+        {% if fila.es_mejor %}<span class="dm-etiqueta-significado dm-etiqueta-positivo">Mejor</span>{% endif %}
+        {% if fila.es_peor %}<span class="dm-etiqueta-significado dm-etiqueta-problema">Peor</span>{% endif %}
       </td>
-      <td>
-        {% if fila.veredicto_temporal == "mejora_significativa" %}<span class="dm-badge-mejor">Cambió — mejoró</span>
-        {% elif fila.veredicto_temporal == "deterioro" %}<span class="dm-badge-peor">Cambió — empeoró</span>
-        {% else %}<span class="dm-badge-neutro">Sin cambio significativo</span>{% endif %}
+      <td data-etiqueta="Vs. período anterior">
+        {% if fila.veredicto_temporal == "mejora_significativa" %}<span class="dm-etiqueta-significado dm-etiqueta-positivo">Cambió — mejoró</span>
+        {% elif fila.veredicto_temporal == "deterioro" %}<span class="dm-etiqueta-significado dm-etiqueta-problema">Cambió — empeoró</span>
+        {% else %}<span class="dm-etiqueta-significado dm-etiqueta-neutro">Sin cambio significativo</span>{% endif %}
       </td>
-      <td>
+      <td data-etiqueta="">
         {% if datos.nivel == "cuenta" %}
         <a href="{{ url_for('datos_meta.campana_detalle', campana_id=fila.id) }}" class="boton-enlace">Ver detalles</a>
         {% endif %}
       </td>
-      <td>
+      <td data-etiqueta="Acciones">
         {% if fila.estado in ("ACTIVE",) %}
         <a href="{{ url_for('datos_meta.acciones_lista', entidad_id=fila.id, tipo_accion='pausar') }}" class="boton-enlace">Proponer pausar</a>
         {% else %}

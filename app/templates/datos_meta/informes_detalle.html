@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block titulo %}{{ informe.titulo }} · Datos de Meta{% endblock %}
 {% block contenido %}
+{% include "datos_meta/_nav.html" %}
+
 <div class="cabecera-seccion">
   <div>
     <h1>{{ informe.titulo }}</h1>
@@ -91,22 +93,22 @@
   <h2 class="ps-seccion-titulo">Campañas</h2>
   {% if contenido.campanas %}
   <div class="dm-tabla-scroll">
-    <table class="dm-tabla-kpi">
-      <thead><tr><th>Campaña</th><th>Estado</th><th>Inversión</th><th>Resultados</th><th>Costo/Resultado</th><th>CTR</th><th>ROAS</th><th>Variación</th></tr></thead>
+    <table class="dm-tabla-kpi dm-tabla-responsive">
+      <thead><tr><th>Campaña</th><th>Estado</th><th>Resultados</th><th>Costo/Resultado</th><th>Inversión</th><th>CTR</th><th>ROAS</th><th>Variación</th></tr></thead>
       <tbody>
         {% for c in contenido.campanas %}
         <tr>
-          <td>{{ c.nombre }}</td>
-          <td>{{ c.estado or "—" }}</td>
-          <td>{{ c.kpis.spend if c.kpis.spend is not none else "No disponible" }}</td>
-          <td>{{ c.kpis.resultados if c.kpis.resultados is not none else "No disponible" }}</td>
-          <td>{{ c.kpis.costo_por_resultado if c.kpis.costo_por_resultado is not none else "No disponible" }}</td>
-          <td>{{ (c.kpis.ctr ~ "%") if c.kpis.ctr is not none else "No disponible" }}</td>
-          <td>{{ c.kpis.roas if c.kpis.roas is not none else "No disponible" }}</td>
-          <td>
-            {% if c.veredicto_temporal == "mejora_significativa" %}<span class="dm-badge-mejor">↑ Mejoró</span>
-            {% elif c.veredicto_temporal == "deterioro" %}<span class="dm-badge-peor">↓ Empeoró</span>
-            {% else %}<span class="dm-badge-neutro">→ Sin cambio</span>{% endif %}
+          <td data-etiqueta="Campaña">{{ c.nombre }}</td>
+          <td data-etiqueta="Estado">{{ c.estado or "—" }}</td>
+          <td data-etiqueta="Resultados">{{ c.kpis.resultados if c.kpis.resultados is not none else "No disponible" }}</td>
+          <td data-etiqueta="Costo/Resultado">{{ c.kpis.costo_por_resultado if c.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+          <td data-etiqueta="Inversión">{{ c.kpis.spend if c.kpis.spend is not none else "No disponible" }}</td>
+          <td data-etiqueta="CTR">{{ (c.kpis.ctr ~ "%") if c.kpis.ctr is not none else "No disponible" }}</td>
+          <td data-etiqueta="ROAS">{{ c.kpis.roas if c.kpis.roas is not none else "No disponible" }}</td>
+          <td data-etiqueta="Variación">
+            {% if c.veredicto_temporal == "mejora_significativa" %}<span class="dm-etiqueta-significado dm-etiqueta-positivo">↑ Mejoró</span>
+            {% elif c.veredicto_temporal == "deterioro" %}<span class="dm-etiqueta-significado dm-etiqueta-problema">↓ Empeoró</span>
+            {% else %}<span class="dm-etiqueta-significado dm-etiqueta-neutro">→ Sin cambio</span>{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -129,19 +131,19 @@
 <section>
   <h2 class="ps-seccion-titulo">Audiencias</h2>
   <div class="dm-tabla-scroll">
-    <table class="dm-tabla-kpi">
-      <thead><tr><th>Audiencia</th><th>Campaña</th><th>Inversión</th><th>Resultados</th><th>Costo/Resultado</th><th>CTR</th><th>Frecuencia</th><th>Rendimiento</th></tr></thead>
+    <table class="dm-tabla-kpi dm-tabla-responsive">
+      <thead><tr><th>Audiencia</th><th>Campaña</th><th>Resultados</th><th>Costo/Resultado</th><th>Inversión</th><th>CTR</th><th>Frecuencia</th><th>Rendimiento</th></tr></thead>
       <tbody>
         {% for s in contenido.audiencias.segmentos %}
         <tr>
-          <td>{{ s.nombre }}</td>
-          <td>{{ s.campana_nombre or "—" }}</td>
-          <td>{{ s.kpis.spend if s.kpis.spend is not none else "No disponible" }}</td>
-          <td>{{ s.kpis.resultados if s.kpis.resultados is not none else "No disponible" }}</td>
-          <td>{{ s.kpis.costo_por_resultado if s.kpis.costo_por_resultado is not none else "No disponible" }}</td>
-          <td>{{ (s.kpis.ctr ~ "%") if s.kpis.ctr is not none else "No disponible" }}</td>
-          <td>{{ s.kpis.frequency if s.kpis.frequency is not none else "No disponible" }}</td>
-          <td>{% if s.es_mejor %}<span class="dm-badge-mejor">Mejor</span>{% elif s.es_peor %}<span class="dm-badge-peor">Peor</span>{% else %}—{% endif %}</td>
+          <td data-etiqueta="Audiencia">{{ s.nombre }}</td>
+          <td data-etiqueta="Campaña">{{ s.campana_nombre or "—" }}</td>
+          <td data-etiqueta="Resultados">{{ s.kpis.resultados if s.kpis.resultados is not none else "No disponible" }}</td>
+          <td data-etiqueta="Costo/Resultado">{{ s.kpis.costo_por_resultado if s.kpis.costo_por_resultado is not none else "No disponible" }}</td>
+          <td data-etiqueta="Inversión">{{ s.kpis.spend if s.kpis.spend is not none else "No disponible" }}</td>
+          <td data-etiqueta="CTR">{{ (s.kpis.ctr ~ "%") if s.kpis.ctr is not none else "No disponible" }}</td>
+          <td data-etiqueta="Frecuencia">{{ s.kpis.frequency if s.kpis.frequency is not none else "No disponible" }}</td>
+          <td data-etiqueta="Rendimiento">{% if s.es_mejor %}<span class="dm-etiqueta-significado dm-etiqueta-positivo">Mejor</span>{% elif s.es_peor %}<span class="dm-etiqueta-significado dm-etiqueta-problema">Peor</span>{% else %}—{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
