@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block titulo %}Importar CSV de Meta · Datos de Meta{% endblock %}
+{% block contenido %}
+{% include "datos_meta/_nav.html" %}
+
+<div class="cabecera-seccion">
+  <div>
+    <h1>Importar CSV de Meta</h1>
+    <p class="perfil-nota">Alternativa mientras la sincronización automática está limitada por Meta: exporta un reporte desde Meta Ads Manager (Descargar → Exportar tabla como .csv) y súbelo aquí. Se guarda con los mismos KPI de siempre, marcado como "importado manualmente" para que nunca se confunda con una sincronización automática.</p>
+  </div>
+  <a href="{{ url_for('datos_meta.conexiones') }}" class="boton-enlace">← Ajustes</a>
+</div>
+
+{% if not cuentas %}
+<div class="estado-vacio"><p>No hay ninguna cuenta publicitaria vinculada todavía.</p></div>
+{% else %}
+<form id="csv-form" class="formulario-simple dm-form-kpi">
+  <label>
+    Cuenta publicitaria
+    <select name="cuenta_id" id="csv-cuenta" required>
+      <option value="">Selecciona una cuenta</option>
+      {% for cuenta in cuentas %}
+      <option value="{{ cuenta.id }}">{{ cuenta.nombre or cuenta.id_externo }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Archivo CSV
+    <input type="file" name="archivo" id="csv-archivo" accept=".csv" required />
+  </label>
+  <button type="submit" class="boton-primario">Importar</button>
+  <p id="csv-mensaje" class="perfil-nota" hidden></p>
+</form>
+
+<div id="csv-resultado" hidden>
+  <h2 class="ps-seccion-titulo">Resultado</h2>
+  <p id="csv-resumen"></p>
+  <div id="csv-advertencias"></div>
+</div>
+
+<details class="cc-glosario">
+  <summary>¿Cómo exporto el CSV desde Meta Ads Manager?</summary>
+  <p class="perfil-nota">En Meta Ads Manager: selecciona las campañas del período que quieras, abre el menú "Descargar" → "Exportar tabla como .csv". El archivo debe incluir al menos las columnas de nombre de campaña, día e importe gastado -- las demás columnas conocidas (impresiones, clics, alcance, frecuencia, resultados, valor de conversión) se toman automáticamente si están presentes.</p>
+  <p class="perfil-nota">Solo se importan filas de campañas que ya estén sincronizadas en esta cuenta -- nunca se crea una campaña nueva a partir de un CSV.</p>
+</details>
+{% endif %}
+
+<script>
+  window.DM_IMPORTAR_CSV_URL = "{{ url_for('datos_meta.importar_csv_procesar') }}";
+</script>
+<script src="{{ url_for('static', filename='js/datos_meta_importar_csv.js') }}"></script>
+{% endblock %}

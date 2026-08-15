@@ -359,6 +359,48 @@ def conexiones_reintentar(sincronizacion_id):
     return jsonify({"ok": True, "estado": sincronizacion.estado, "error": sincronizacion.error_mensaje})
 
 
+# --- Importacion manual de CSV de Meta Ads Manager (alternativa mientras
+# la sincronizacion automatica esta limitada por Meta) -------------------
+
+TAMANO_MAXIMO_CSV_BYTES = 5 * 1024 * 1024  # 5 MB -- un reporte de Meta nunca deberia pesar mas que esto
+
+
+@datos_meta_bp.get("/conexiones/importar-csv")
+@login_required
+def importar_csv_formulario():
+    empresa, _rol = _empresa_activa_o_404()
+    cuentas = listar_entidades_empresa(empresa.id, tipo="cuenta_publicitaria")
+    return render_template("datos_meta/importar_csv.html", empresa_activa=empresa, cuentas=cuentas)
+
+
+@datos_meta_bp.post("/conexiones/importar-csv")
+@login_required
+def importar_csv_procesar():
+    from app.services.meta.importador_csv import procesar_csv_meta
+
+    empresa, _rol = _empresa_activa_o_404()
+
+    cuenta_id = request.form.get("cuenta_id", type=int)
+    if not cuenta_id:
+        return jsonify({"ok": False, "error": "Selecciona una cuenta publicitaria."}), 400
+
+    archivo = request.files.get("archivo")
+    if archivo is None or not archivo.filename:
+        return jsonify({"ok": False, "error": "Selecciona un archivo .csv."}), 400
+    if not archivo.filename.lower().endswith(".csv"):
+        return jsonify({"ok": False, "error": "El archivo debe tener extensión .csv."}), 400
+
+    contenido = archivo.read()
+    if len(contenido) > TAMANO_MAXIMO_CSV_BYTES:
+        return jsonify({"ok": False, "error": "El archivo es demasiado grande (máximo 5 MB)."}), 400
+
+    resumen, error = procesar_csv_meta(empresa.id, cuenta_id, contenido)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    return jsonify({"ok": True, **resumen})
+
+
 # --- Presupuesto de pauta (Paso 2, puntos 9 y 10) ---------------------------------
 
 @datos_meta_bp.post("/conexiones/presupuesto")
