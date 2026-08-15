@@ -2666,6 +2666,41 @@ body {
   }
 }
 
+/* --- Centro de Datos (Paso 2): fuentes conectadas, informativo -------- */
+
+.cd-fuentes-conectadas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  background: #f9fafb;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+
+.cd-fuentes-titulo {
+  font-weight: 600;
+  color: #374151;
+}
+
+.cd-fuente-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #6b7280;
+}
+
+.cd-fuente-punto-conectada {
+  color: #16a34a;
+}
+
+.cd-fuente-punto-desconectada {
+  color: #9ca3af;
+}
+
 /* --- Conexiones: acciones agrupadas por área (en vez de una fila plana de enlaces) --- */
 
 .dm-acciones-principal {

@@ -169,6 +169,8 @@ def conexiones():
 
     presupuestos = [calcular_resumen_presupuesto(p) for p in obtener_presupuestos_empresa(empresa.id)]
 
+    from app.services.centro_datos import obtener_fuentes_empresa
+
     return render_template(
         "datos_meta/conexiones.html",
         empresa_activa=empresa,
@@ -184,6 +186,7 @@ def conexiones():
         periodos=PERIODOS_PREDEFINIDOS,
         etiquetas_periodos=ETIQUETAS_PERIODOS,
         presupuestos=presupuestos,
+        fuentes_datos=obtener_fuentes_empresa(empresa.id),
     )
 
 

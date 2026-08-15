@@ -55,6 +55,12 @@ from app.models.informe_pauta import (
     ESTADOS_INFORME_PAUTA,
     MODOS_INFORME_PAUTA,
 )
+from app.models.fuente_datos import (
+    FuenteDatos,
+    TIPOS_FUENTE_DATOS,
+    ETIQUETAS_FUENTE_DATOS,
+    ESTADOS_FUENTE_DATOS,
+)
 
 __all__ = [
     "Usuario",
@@ -119,4 +125,8 @@ __all__ = [
     "TIPOS_COMPARACION_INFORME",
     "ESTADOS_INFORME_PAUTA",
     "MODOS_INFORME_PAUTA",
+    "FuenteDatos",
+    "TIPOS_FUENTE_DATOS",
+    "ETIQUETAS_FUENTE_DATOS",
+    "ESTADOS_FUENTE_DATOS",
 ]

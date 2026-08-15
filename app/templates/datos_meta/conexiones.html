@@ -10,6 +10,16 @@
   </div>
 </div>
 
+<div class="cd-fuentes-conectadas">
+  <span class="cd-fuentes-titulo">Centro de Datos — Fuentes conectadas:</span>
+  {% for f in fuentes_datos %}
+  <span class="cd-fuente-item">
+    <span class="cd-fuente-punto {{ 'cd-fuente-punto-conectada' if f.conectada else 'cd-fuente-punto-desconectada' }}">{{ '●' if f.conectada else '○' }}</span>
+    {{ f.etiqueta }} — {{ 'Conectada' if f.conectada else 'No conectado' }}
+  </span>
+  {% endfor %}
+</div>
+
 {% if not conexion and not meta_configurado %}
 <div class="estado-vacio">
   <p><strong>Meta no está configurado en este entorno.</strong></p>
