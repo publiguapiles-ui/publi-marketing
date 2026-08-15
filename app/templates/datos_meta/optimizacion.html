@@ -154,16 +154,16 @@
 <h2 class="ps-seccion-titulo">Presupuesto</h2>
 {% if datos.presupuesto.presupuestos %}
 <div class="dm-tabla-scroll">
-<table class="dm-tabla-kpi">
+<table class="dm-tabla-kpi dm-tabla-responsive">
   <thead><tr><th>Presupuesto</th><th>Monto</th><th>Gasto real</th><th>% usado</th><th>Acción recomendada</th></tr></thead>
   <tbody>
     {% for r in datos.presupuesto.presupuestos %}
     <tr>
-      <td>{{ r.nombre }}</td>
-      <td>{{ r.monto }} {{ r.moneda }}</td>
-      <td>{{ r.gasto_real }} {{ r.moneda }}</td>
-      <td>{{ r.porcentaje_usado }}%{% if r.porcentaje_usado is none %} —{% endif %}</td>
-      <td>{{ r.accion_recomendada or "—" }}</td>
+      <td data-etiqueta="Presupuesto">{{ r.nombre }}</td>
+      <td data-etiqueta="Monto">{{ r.monto }} {{ r.moneda }}</td>
+      <td data-etiqueta="Gasto real">{{ r.gasto_real }} {{ r.moneda }}</td>
+      <td data-etiqueta="% usado">{{ r.porcentaje_usado }}%{% if r.porcentaje_usado is none %} —{% endif %}</td>
+      <td data-etiqueta="Acción recomendada">{{ r.accion_recomendada or "—" }}</td>
     </tr>
     {% endfor %}
   </tbody>

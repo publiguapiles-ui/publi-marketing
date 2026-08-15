@@ -58,7 +58,7 @@
       return;
     }
 
-    const tabla = crear("table", "dm-tabla-kpi");
+    const tabla = crear("table", "dm-tabla-kpi dm-tabla-responsive");
     const thead = crear("thead");
     const filaCab = crear("tr");
     ["Conjunto", "Campaña", "Audiencia configurada", ...COLUMNAS.map((c) => c.etiqueta), "Resultado"].forEach((t) => filaCab.appendChild(crear("th", null, t)));
@@ -68,11 +68,22 @@
     const tbody = crear("tbody");
     segmentos.forEach((fila) => {
       const tr = crear("tr");
-      tr.appendChild(crear("td", null, fila.nombre));
-      tr.appendChild(crear("td", null, fila.campana_nombre || "—"));
-      tr.appendChild(crear("td", null, describirConfiguracion(fila.targeting)));
-      COLUMNAS.forEach((c) => tr.appendChild(crear("td", null, formatearKpi(c.clave, fila.kpis[c.clave]))));
+      const tdConjunto = crear("td", null, fila.nombre);
+      tdConjunto.setAttribute("data-etiqueta", "Conjunto");
+      tr.appendChild(tdConjunto);
+      const tdCampana = crear("td", null, fila.campana_nombre || "—");
+      tdCampana.setAttribute("data-etiqueta", "Campaña");
+      tr.appendChild(tdCampana);
+      const tdAudiencia = crear("td", null, describirConfiguracion(fila.targeting));
+      tdAudiencia.setAttribute("data-etiqueta", "Audiencia configurada");
+      tr.appendChild(tdAudiencia);
+      COLUMNAS.forEach((c) => {
+        const td = crear("td", null, formatearKpi(c.clave, fila.kpis[c.clave]));
+        td.setAttribute("data-etiqueta", c.etiqueta);
+        tr.appendChild(td);
+      });
       const tdRend = crear("td");
+      tdRend.setAttribute("data-etiqueta", "Resultado");
       if (fila.es_mejor) tdRend.appendChild(crear("span", "dm-badge-mejor", "Mejor resultado"));
       if (fila.es_peor) tdRend.appendChild(crear("span", "dm-badge-peor", "Peor resultado"));
       tr.appendChild(tdRend);

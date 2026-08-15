@@ -2538,6 +2538,11 @@ body {
     align-items: center;
     justify-content: center;
   }
+
+  .cp-boton-mic {
+    width: var(--tamano-tactil-minimo);
+    height: var(--tamano-tactil-minimo);
+  }
 }
 
 @media (max-width: 600px) {

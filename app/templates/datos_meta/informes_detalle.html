@@ -61,7 +61,7 @@
 <section>
   <h2 class="ps-seccion-titulo">Comparación con el período de referencia</h2>
   <div class="dm-tabla-scroll">
-    <table class="dm-tabla-kpi">
+    <table class="dm-tabla-kpi dm-tabla-responsive">
       <thead><tr><th>KPI</th><th>Período actual</th><th>Período comparado</th><th>Variación</th></tr></thead>
       <tbody>
         {% for clave in contenido.claves_kpi %}
@@ -70,10 +70,10 @@
         {% set variacion = contenido.comparacion_periodos.variacion_porcentual.get(clave) %}
         {% if actual is not none or anterior is not none %}
         <tr>
-          <td>{{ contenido.etiquetas_kpi[clave] }}</td>
-          <td>{{ actual if actual is not none else "No disponible" }}</td>
-          <td>{{ anterior if anterior is not none else "No disponible" }}</td>
-          <td>
+          <td data-etiqueta="KPI">{{ contenido.etiquetas_kpi[clave] }}</td>
+          <td data-etiqueta="Período actual">{{ actual if actual is not none else "No disponible" }}</td>
+          <td data-etiqueta="Período comparado">{{ anterior if anterior is not none else "No disponible" }}</td>
+          <td data-etiqueta="Variación">
             {% if variacion is none %}—
             {% elif variacion > 0 %}<span class="dm-variacion-positiva">↑ +{{ variacion }}%</span>
             {% elif variacion < 0 %}<span class="dm-variacion-negativa">↓ {{ variacion }}%</span>
@@ -209,17 +209,17 @@
 <section>
   <h2 class="ps-seccion-titulo">Plan de acción</h2>
   <div class="dm-tabla-scroll">
-    <table class="dm-tabla-kpi">
+    <table class="dm-tabla-kpi dm-tabla-responsive">
       <thead><tr><th>Prioridad</th><th>Acción</th><th>Motivo</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
       <tbody>
         {% for p in contenido.plan_accion %}
         <tr>
-          <td><span class="opt-badge-prioridad opt-badge-prioridad-{{ p.prioridad }}">{{ p.prioridad_etiqueta }}</span></td>
-          <td>{{ p.accion }}</td>
-          <td>{{ p.motivo }}</td>
-          <td>{{ p.responsable }}</td>
-          <td>{{ p.estado }}</td>
-          <td>{% if p.entidad_id %}<a href="{{ url_for('datos_meta.acciones_lista', entidad_id=p.entidad_id, motivo=p.motivo) }}" class="boton-enlace">Preparar acción</a>{% endif %}</td>
+          <td data-etiqueta="Prioridad"><span class="opt-badge-prioridad opt-badge-prioridad-{{ p.prioridad }}">{{ p.prioridad_etiqueta }}</span></td>
+          <td data-etiqueta="Acción">{{ p.accion }}</td>
+          <td data-etiqueta="Motivo">{{ p.motivo }}</td>
+          <td data-etiqueta="Responsable">{{ p.responsable }}</td>
+          <td data-etiqueta="Estado">{{ p.estado }}</td>
+          <td data-etiqueta="">{% if p.entidad_id %}<a href="{{ url_for('datos_meta.acciones_lista', entidad_id=p.entidad_id, motivo=p.motivo) }}" class="boton-enlace">Preparar acción</a>{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
