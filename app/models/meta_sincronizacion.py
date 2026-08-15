@@ -35,6 +35,11 @@ class SincronizacionMeta(db.Model):
     registros_procesados = db.Column(db.Integer, default=0, nullable=False)
     intentos = db.Column(db.Integer, default=0, nullable=False)
     error_mensaje = db.Column(db.String(500), nullable=True)
+    # Paso 16.1 (correccion de sincronizacion): una de CATEGORIAS_ERROR_META
+    # (ver app/services/meta/errores.py), guardada aparte del mensaje para
+    # poder aplicar un enfriamiento real cuando la categoria es
+    # "limite_api" sin tener que adivinar por texto (ver sincronizacion.py).
+    categoria_error = db.Column(db.String(30), nullable=True)
 
     iniciada_en = db.Column(db.DateTime, nullable=True)
     finalizada_en = db.Column(db.DateTime, nullable=True)

@@ -12,18 +12,31 @@ from tests.conftest import iniciar_sesion_de_prueba
 
 
 def _mockear_get_meta(monkeypatch, mapa_respuestas):
+    """El mapa acepta claves "ruta" (para endpoints que no dependen de
+    params, ej. .../campaigns) o "ruta::level" (para .../insights, que
+    desde el Paso 16.1 se llama UNA vez por nivel con el mismo `ruta` y
+    solo el parametro `level` los distingue -- ver insights_service.py)."""
     import app.services.meta.client as client_mod
 
-    def _resolver(ruta):
+    def _resolver(ruta, params=None):
+        params = params or {}
+        nivel = params.get("level")
+        if nivel:
+            clave_nivel = f"{ruta}::{nivel}"
+            for prefijo, respuesta in mapa_respuestas.items():
+                if clave_nivel == prefijo or clave_nivel.startswith(prefijo):
+                    if isinstance(respuesta, Exception):
+                        raise respuesta
+                    return respuesta
         for prefijo, respuesta in mapa_respuestas.items():
             if ruta == prefijo or ruta.startswith(prefijo):
                 if isinstance(respuesta, Exception):
                     raise respuesta
                 return respuesta
-        raise AssertionError(f"ruta inesperada en el mock: {ruta}")
+        raise AssertionError(f"ruta inesperada en el mock: {ruta} (level={nivel})")
 
-    monkeypatch.setattr(client_mod.MetaClient, "get", lambda self, ruta, params=None, access_token=None: _resolver(ruta))
-    monkeypatch.setattr(client_mod.MetaClient, "get_todas_las_paginas", lambda self, ruta, params=None, limite_paginas=20: _resolver(ruta).get("data", []))
+    monkeypatch.setattr(client_mod.MetaClient, "get", lambda self, ruta, params=None, access_token=None: _resolver(ruta, params))
+    monkeypatch.setattr(client_mod.MetaClient, "get_todas_las_paginas", lambda self, ruta, params=None, limite_paginas=20: _resolver(ruta, params).get("data", []))
 
 
 # --- Periodos --------------------------------------------------------------------
@@ -193,7 +206,10 @@ def test_mensaje_para_usuario_sin_uso_meta_no_inventa_numeros():
 
     exc = MetaAPIError("Rate limit", codigo=613, uso_meta=None)
     mensaje = mensaje_para_usuario("limite_api", exc)
-    assert mensaje == "Se alcanzó el límite de solicitudes de Meta. Intenta de nuevo en unos minutos."
+    assert mensaje.startswith("Se alcanzó el límite de solicitudes de Meta. Intenta de nuevo en unos minutos.")
+    assert "%" not in mensaje  # sin uso_meta, nunca se inventa un porcentaje
+    # Paso 16.1, punto 8: nunca dejar que "sin numeros" suene a "sin limite".
+    assert "No se realizarán más consultas" in mensaje
 
 
 def test_detalle_tecnico_incluye_codigo_subcodigo_y_tipo():
@@ -364,9 +380,9 @@ def test_sincronizar_insights_guarda_metricas_via_motor_universal(client, usuari
     _mockear_get_meta(monkeypatch, {
         "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
         "c1/adsets": {"data": []},
-        "c1/insights": {"data": [
-            {"spend": "10.5", "impressions": "1000", "reach": "800", "clicks": "12", "frequency": "1.25", "date_start": "2026-08-01", "date_stop": "2026-08-01"},
-            {"spend": "8.0", "impressions": "900", "reach": "700", "clicks": "9", "frequency": "1.1", "date_start": "2026-08-02", "date_stop": "2026-08-02"},
+        "act_123/insights::campaign": {"data": [
+            {"campaign_id": "c1", "spend": "10.5", "impressions": "1000", "reach": "800", "clicks": "12", "frequency": "1.25", "date_start": "2026-08-01", "date_stop": "2026-08-01"},
+            {"campaign_id": "c1", "spend": "8.0", "impressions": "900", "reach": "700", "clicks": "9", "frequency": "1.1", "date_start": "2026-08-02", "date_stop": "2026-08-02"},
         ]},
     })
 
@@ -375,6 +391,11 @@ def test_sincronizar_insights_guarda_metricas_via_motor_universal(client, usuari
         resumen, error = sincronizar_insights(usuario_a_con_empresa["empresa_id"], datetime.date(2026, 8, 1), datetime.date(2026, 8, 2))
         assert error is None
         assert resumen["entidades_con_datos"] == 1
+        # Sin conjuntos/anuncios rastreados, solo el nivel "campaign"
+        # dispara una llamada -- UNA sola, sin importar cuantas filas
+        # (dias x campanas) traiga esa llamada (punto 1/2 del Paso 16.1).
+        assert resumen["llamadas_realizadas"] == 1
+        assert resumen["filas_no_reconocidas"] == 0
 
         filas = consultar_metricas(usuario_a_con_empresa["empresa_id"], metrica_nombre="spend")
         assert len(filas) == 2
@@ -396,7 +417,7 @@ def test_sincronizar_insights_reemplaza_el_mismo_dia_sin_duplicar(client, usuari
     _mockear_get_meta(monkeypatch, {
         "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
         "c1/adsets": {"data": []},
-        "c1/insights": {"data": [{"spend": "10.0", "impressions": "1000", "reach": "800", "clicks": "10", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
+        "act_123/insights::campaign": {"data": [{"campaign_id": "c1", "spend": "10.0", "impressions": "1000", "reach": "800", "clicks": "10", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
     })
 
     with client.application.app_context():
@@ -419,7 +440,7 @@ def test_iniciar_sincronizacion_completa_exitosamente(client, usuario_a_con_empr
     _mockear_get_meta(monkeypatch, {
         "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
         "c1/adsets": {"data": []},
-        "c1/insights": {"data": [{"spend": "5.0", "impressions": "500", "reach": "400", "clicks": "5", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
+        "act_123/insights::campaign": {"data": [{"campaign_id": "c1", "spend": "5.0", "impressions": "500", "reach": "400", "clicks": "5", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
     })
 
     with client.application.app_context():
@@ -680,7 +701,7 @@ def test_conexiones_muestra_conteos_de_estructura_reales(client, usuario_a_con_e
     _mockear_get_meta(monkeypatch, {
         "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
         "c1/adsets": {"data": []},
-        "c1/insights": {"data": []},
+        "act_123/insights::campaign": {"data": []},
     })
 
     with client.application.app_context():
@@ -693,3 +714,367 @@ def test_conexiones_muestra_conteos_de_estructura_reales(client, usuario_a_con_e
     texto = resp.get_data(as_text=True)
     assert resp.status_code == 200
     assert "completada" in texto
+
+
+# --- Paso 16.1: sincronizacion agrupada por nivel, enfriamiento, guardas ----------
+
+def test_sincronizar_insights_agrupa_por_nivel_una_llamada_por_nivel_con_datos(client, usuario_a_con_empresa, monkeypatch):
+    """3 campañas bajo la misma cuenta -- level=campaign debe traerlas
+    TODAS en una sola llamada, nunca una por campaña (puntos 1 y 2)."""
+    from app.services.meta.campanas_service import sincronizar_estructura
+    from app.services.meta.insights_service import sincronizar_insights
+    from app.services.metricas import consultar_metricas
+
+    with client.application.app_context():
+        _preparar_cuenta_vinculada(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"])
+
+    _mockear_get_meta(monkeypatch, {
+        "act_123/campaigns": {"data": [
+            {"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"},
+            {"id": "c2", "name": "Campaña 2", "status": "ACTIVE", "effective_status": "ACTIVE"},
+            {"id": "c3", "name": "Campaña 3", "status": "ACTIVE", "effective_status": "ACTIVE"},
+        ]},
+        "c1/adsets": {"data": []},
+        "c2/adsets": {"data": []},
+        "c3/adsets": {"data": []},
+        "act_123/insights::campaign": {"data": [
+            {"campaign_id": "c1", "spend": "10.0", "impressions": "100", "reach": "90", "clicks": "1", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"},
+            {"campaign_id": "c2", "spend": "20.0", "impressions": "200", "reach": "190", "clicks": "2", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"},
+            {"campaign_id": "c3", "spend": "30.0", "impressions": "300", "reach": "290", "clicks": "3", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"},
+        ]},
+    })
+
+    with client.application.app_context():
+        sincronizar_estructura(usuario_a_con_empresa["empresa_id"])
+        resumen, error = sincronizar_insights(usuario_a_con_empresa["empresa_id"], datetime.date(2026, 8, 1), datetime.date(2026, 8, 1))
+        assert error is None
+        assert resumen["entidades_con_datos"] == 3
+        assert resumen["llamadas_realizadas"] == 1  # UNA sola llamada trajo las 3 campañas
+
+        filas = consultar_metricas(usuario_a_con_empresa["empresa_id"], metrica_nombre="spend")
+        assert len(filas) == 3
+        assert round(sum(f.valor for f in filas), 2) == 60.0
+
+
+def test_sincronizar_insights_agrupa_los_3_niveles_campana_conjunto_anuncio(client, usuario_a_con_empresa, monkeypatch):
+    """Campaña -> conjunto -> anuncio (jerarquía de 1 elemento cada
+    uno): exactamente 3 llamadas (una por nivel), nunca una por
+    entidad individual."""
+    from app.services.meta.campanas_service import sincronizar_estructura
+    from app.services.meta.insights_service import sincronizar_insights
+    from app.services.metricas import consultar_metricas
+
+    with client.application.app_context():
+        _preparar_cuenta_vinculada(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"])
+
+    _mockear_get_meta(monkeypatch, {
+        "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
+        "c1/adsets": {"data": [{"id": "as1", "name": "Conjunto 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
+        "as1/ads": {"data": [{"id": "ad1", "name": "Anuncio 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
+        "act_123/insights::campaign": {"data": [{"campaign_id": "c1", "spend": "10.0", "impressions": "100", "reach": "90", "clicks": "1", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
+        "act_123/insights::adset": {"data": [{"adset_id": "as1", "spend": "10.0", "impressions": "100", "reach": "90", "clicks": "1", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
+        "act_123/insights::ad": {"data": [{"ad_id": "ad1", "spend": "10.0", "impressions": "100", "reach": "90", "clicks": "1", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
+    })
+
+    with client.application.app_context():
+        sincronizar_estructura(usuario_a_con_empresa["empresa_id"])
+        resumen, error = sincronizar_insights(usuario_a_con_empresa["empresa_id"], datetime.date(2026, 8, 1), datetime.date(2026, 8, 1))
+        assert error is None
+        assert resumen["entidades_consultadas"] == 3  # c1 + as1 + ad1
+        assert resumen["entidades_con_datos"] == 3
+        assert resumen["llamadas_realizadas"] == 3  # una por nivel, nunca una por entidad
+        assert resumen["filas_no_reconocidas"] == 0
+        assert len(consultar_metricas(usuario_a_con_empresa["empresa_id"], metrica_nombre="spend")) == 3
+
+
+def test_sincronizar_insights_ignora_fila_de_entidad_no_rastreada(client, usuario_a_con_empresa, monkeypatch):
+    """Meta puede devolver, bajo el mismo nivel, una entidad que Publi
+    Marketing no tiene sincronizada localmente todavía -- se ignora esa
+    fila puntual, nunca se inventa la entidad, y queda documentada en
+    filas_no_reconocidas (punto 11: reconciliación)."""
+    from app.services.meta.campanas_service import sincronizar_estructura
+    from app.services.meta.insights_service import sincronizar_insights
+    from app.services.metricas import consultar_metricas
+
+    with client.application.app_context():
+        _preparar_cuenta_vinculada(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"])
+
+    _mockear_get_meta(monkeypatch, {
+        "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
+        "c1/adsets": {"data": []},
+        "act_123/insights::campaign": {"data": [
+            {"campaign_id": "c1", "spend": "10.0", "impressions": "100", "reach": "90", "clicks": "1", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"},
+            {"campaign_id": "c-desconocida", "spend": "999.0", "impressions": "1", "reach": "1", "clicks": "1", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"},
+        ]},
+    })
+
+    with client.application.app_context():
+        sincronizar_estructura(usuario_a_con_empresa["empresa_id"])
+        resumen, error = sincronizar_insights(usuario_a_con_empresa["empresa_id"], datetime.date(2026, 8, 1), datetime.date(2026, 8, 1))
+        assert error is None
+        assert resumen["filas_no_reconocidas"] == 1
+        assert resumen["entidades_con_datos"] == 1
+
+        filas = consultar_metricas(usuario_a_con_empresa["empresa_id"], metrica_nombre="spend")
+        assert len(filas) == 1
+        assert filas[0].valor == 10.0  # la fila de "c-desconocida" (999.0) nunca se guardo
+
+
+def test_sincronizar_insights_sigue_paginacion_real_de_meta(client, usuario_a_con_empresa, monkeypatch):
+    """A diferencia de los demas tests (que reemplazan
+    get_todas_las_paginas por completo), este solo mockea .get() para
+    ejercitar la paginación REAL (paging.next) sobre la llamada
+    agrupada por nivel -- confirma que 2 páginas de una misma llamada
+    level=campaign se combinan correctamente (punto 3)."""
+    import app.services.meta.client as client_mod
+    from app.services.meta.campanas_service import sincronizar_estructura
+    from app.services.meta.insights_service import sincronizar_insights
+    from app.services.metricas import consultar_metricas
+
+    with client.application.app_context():
+        _preparar_cuenta_vinculada(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"])
+
+    respuestas = {
+        "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
+        "c1/adsets": {"data": []},
+    }
+    pagina_1 = {
+        "data": [{"campaign_id": "c1", "spend": "10.0", "impressions": "100", "reach": "90", "clicks": "1", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"}],
+        "paging": {"next": "https://graph.facebook.com/v21.0/act_123/insights?after=CURSOR1"},
+    }
+    pagina_2 = {
+        "data": [{"campaign_id": "c1", "spend": "5.0", "impressions": "50", "reach": "45", "clicks": "1", "frequency": "1.0", "date_start": "2026-08-02", "date_stop": "2026-08-02"}],
+    }
+
+    def _get(self, ruta, params=None, access_token=None):
+        if ruta == "act_123/insights" and (params or {}).get("level") == "campaign":
+            return pagina_1
+        if ruta == "https://graph.facebook.com/v21.0/act_123/insights?after=CURSOR1":
+            return pagina_2
+        for prefijo, respuesta in respuestas.items():
+            if ruta == prefijo or ruta.startswith(prefijo):
+                return respuesta
+        raise AssertionError(f"ruta inesperada: {ruta}")
+
+    monkeypatch.setattr(client_mod.MetaClient, "get", _get)
+
+    with client.application.app_context():
+        sincronizar_estructura(usuario_a_con_empresa["empresa_id"])
+        resumen, error = sincronizar_insights(usuario_a_con_empresa["empresa_id"], datetime.date(2026, 8, 1), datetime.date(2026, 8, 2))
+        assert error is None
+        assert resumen["llamadas_realizadas"] == 1  # sigue siendo "una consulta" aunque tuviera 2 paginas
+
+        filas = consultar_metricas(usuario_a_con_empresa["empresa_id"], metrica_nombre="spend")
+        assert len(filas) == 2  # las 2 paginas se combinaron
+        assert round(sum(f.valor for f in filas), 2) == 15.0
+
+
+def test_sincronizacion_guarda_categoria_error_en_codigo_17(client, usuario_a_con_empresa, monkeypatch):
+    """Cuando Meta devuelve exactamente el error real que motivo esta
+    correccion (code=17, "User request limit reached"), la
+    sincronizacion debe quedar categorizada como limite_api (para el
+    enfriamiento del punto 7) -- no como un error generico."""
+    from app.services.meta.client import MetaAPIError
+    from app.services.meta.sincronizacion import iniciar_sincronizacion
+
+    with client.application.app_context():
+        _preparar_cuenta_vinculada(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"])
+
+    _mockear_get_meta(monkeypatch, {
+        "act_123/campaigns": MetaAPIError("User request limit reached", codigo=17, subcodigo=2446079, tipo="OAuthException"),
+    })
+
+    with client.application.app_context():
+        sincronizacion, error = iniciar_sincronizacion(
+            usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "inicial",
+            datetime.date(2026, 8, 1), datetime.date(2026, 8, 1),
+        )
+        assert error is None
+        assert sincronizacion.estado == "error"
+        assert sincronizacion.categoria_error == "limite_api"
+        assert "No se realizarán más consultas" in sincronizacion.error_mensaje
+
+
+def test_iniciar_sincronizacion_bloqueada_mientras_hay_una_en_progreso(client, usuario_a_con_empresa):
+    """Punto 6: dos sincronizaciones simultáneas de la misma empresa no
+    deben poder dispararse -- si la última sigue en_progreso, se
+    bloquea con un mensaje explícito en vez de crear una fila nueva."""
+    from app.extensions import db
+    from app.models import SincronizacionMeta
+    from app.services.meta.conexiones import crear_conexion
+    from app.services.meta.sincronizacion import iniciar_sincronizacion
+
+    with client.application.app_context():
+        conexion = crear_conexion(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "111", "A", "token-a")
+        en_curso = SincronizacionMeta(
+            empresa_id=usuario_a_con_empresa["empresa_id"], conexion_id=conexion.id,
+            tipo="incremental", estado="en_progreso",
+        )
+        db.session.add(en_curso)
+        db.session.commit()
+
+        sincronizacion, error = iniciar_sincronizacion(
+            usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "incremental",
+            datetime.date(2026, 8, 1), datetime.date(2026, 8, 1),
+        )
+        assert sincronizacion is None
+        assert error == "Sincronización en progreso."
+        assert db.session.query(SincronizacionMeta).count() == 1  # no se creo una segunda fila
+
+
+def test_iniciar_sincronizacion_bloqueada_por_enfriamiento_tras_limite_api(client, usuario_a_con_empresa):
+    """Punto 7 (backoff): tras un error limite_api MUY reciente, no se
+    permite iniciar otra sincronización todavía -- evita seguir
+    golpeando la API mientras el límite sigue activo."""
+    from datetime import datetime as dt
+    from datetime import timezone
+
+    from app.extensions import db
+    from app.models import SincronizacionMeta
+    from app.services.meta.conexiones import crear_conexion
+    from app.services.meta.sincronizacion import iniciar_sincronizacion
+
+    with client.application.app_context():
+        conexion = crear_conexion(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "111", "A", "token-a")
+        fallida = SincronizacionMeta(
+            empresa_id=usuario_a_con_empresa["empresa_id"], conexion_id=conexion.id,
+            tipo="incremental", estado="error", categoria_error="limite_api",
+            finalizada_en=dt.now(timezone.utc),
+        )
+        db.session.add(fallida)
+        db.session.commit()
+
+        sincronizacion, error = iniciar_sincronizacion(
+            usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "incremental",
+            datetime.date(2026, 8, 1), datetime.date(2026, 8, 1),
+        )
+        assert sincronizacion is None
+        assert "Meta está limitando" in error
+
+
+def test_iniciar_sincronizacion_permitida_tras_pasar_el_enfriamiento(client, usuario_a_con_empresa, monkeypatch):
+    """Lo simétrico del test anterior: pasado el tiempo de
+    enfriamiento, una nueva sincronización SI debe poder iniciarse --
+    el bloqueo no es permanente."""
+    from datetime import datetime as dt
+    from datetime import timedelta, timezone
+
+    from app.extensions import db
+    from app.models import SincronizacionMeta
+    from app.services.meta.conexiones import crear_conexion
+    from app.services.meta.sincronizacion import MINUTOS_ENFRIAMIENTO_LIMITE_API, iniciar_sincronizacion
+
+    with client.application.app_context():
+        conexion = crear_conexion(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "111", "A", "token-a")
+        fallida = SincronizacionMeta(
+            empresa_id=usuario_a_con_empresa["empresa_id"], conexion_id=conexion.id,
+            tipo="incremental", estado="error", categoria_error="limite_api",
+            finalizada_en=dt.now(timezone.utc) - timedelta(minutes=MINUTOS_ENFRIAMIENTO_LIMITE_API + 1),
+        )
+        db.session.add(fallida)
+        db.session.commit()
+
+    _mockear_get_meta(monkeypatch, {"act_123/campaigns": {"data": []}})
+
+    with client.application.app_context():
+        from app.services.meta.cuentas_service import vincular_activos
+
+        vincular_activos(usuario_a_con_empresa["empresa_id"], [
+            {"tipo": "cuenta_publicitaria", "id_externo": "act_123", "nombre": "Cuenta", "atributos": {"moneda": "USD"}},
+        ])
+
+        sincronizacion, error = iniciar_sincronizacion(
+            usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "incremental",
+            datetime.date(2026, 8, 1), datetime.date(2026, 8, 1),
+        )
+        assert error is None
+        assert sincronizacion is not None
+
+
+def test_reintentar_sincronizacion_respeta_el_enfriamiento(client, usuario_a_con_empresa):
+    """El boton [Reintentar] tambien debe respetar el enfriamiento del
+    punto 7 -- no solo iniciar_sincronizacion()."""
+    from datetime import datetime as dt
+    from datetime import timezone
+
+    from app.extensions import db
+    from app.models import SincronizacionMeta
+    from app.services.meta.conexiones import crear_conexion
+    from app.services.meta.sincronizacion import reintentar_sincronizacion
+
+    with client.application.app_context():
+        conexion = crear_conexion(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], "111", "A", "token-a")
+        fallida = SincronizacionMeta(
+            empresa_id=usuario_a_con_empresa["empresa_id"], conexion_id=conexion.id,
+            tipo="incremental", estado="error", categoria_error="limite_api", intentos=1,
+            finalizada_en=dt.now(timezone.utc),
+        )
+        db.session.add(fallida)
+        db.session.commit()
+
+        sincronizacion, error = reintentar_sincronizacion(usuario_a_con_empresa["empresa_id"], fallida.id)
+        assert sincronizacion is None
+        assert "Meta está limitando" in error
+
+
+def test_sincronizacion_fallida_no_borra_metricas_historicas_previas(client, usuario_a_con_empresa, monkeypatch):
+    """Punto 10: un intento de sincronización que falla a mitad de
+    camino (nivel campaign trae datos y los guarda; nivel adset lanza
+    limite_api) nunca debe perder métricas de días ya guardados por una
+    sincronización ANTERIOR exitosa."""
+    from app.services.meta.campanas_service import sincronizar_estructura
+    from app.services.meta.client import MetaAPIError
+    from app.services.meta.insights_service import sincronizar_insights
+    from app.services.metricas import consultar_metricas
+
+    with client.application.app_context():
+        _preparar_cuenta_vinculada(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"])
+
+    _mockear_get_meta(monkeypatch, {
+        "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
+        "c1/adsets": {"data": [{"id": "as1", "name": "Conjunto 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
+        "as1/ads": {"data": []},
+        "act_123/insights::campaign": {"data": [{"campaign_id": "c1", "spend": "10.0", "impressions": "100", "reach": "90", "clicks": "1", "frequency": "1.0", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
+        "act_123/insights::adset": {"data": []},
+    })
+
+    with client.application.app_context():
+        sincronizar_estructura(usuario_a_con_empresa["empresa_id"])
+        resumen, error = sincronizar_insights(usuario_a_con_empresa["empresa_id"], datetime.date(2026, 8, 1), datetime.date(2026, 8, 1))
+        assert error is None
+        assert len(consultar_metricas(usuario_a_con_empresa["empresa_id"], metrica_nombre="spend")) == 1
+
+    # Segundo intento: falla YA en el primer nivel consultado (campaign),
+    # asi que no llega a guardar nada nuevo.
+    _mockear_get_meta(monkeypatch, {
+        "act_123/insights::campaign": MetaAPIError("User request limit reached", codigo=17, subcodigo=2446079, tipo="OAuthException"),
+    })
+
+    with client.application.app_context():
+        resumen2, error2 = sincronizar_insights(usuario_a_con_empresa["empresa_id"], datetime.date(2026, 8, 2), datetime.date(2026, 8, 2))
+        assert error2 is not None
+
+        # El dia 2026-08-01, guardado por el intento anterior EXITOSO,
+        # sigue intacto -- el intento fallido no lo toco ni lo borro.
+        filas = consultar_metricas(usuario_a_con_empresa["empresa_id"], metrica_nombre="spend")
+        assert len(filas) == 1
+        assert filas[0].valor == 10.0
+
+    # Y si el fallo ocurre DESPUES de que un nivel ya guardo datos
+    # reales con exito (campaign trae 08-02 antes de que adset falle),
+    # esos datos reales NO se descartan -- serian datos genuinos
+    # perdidos sin motivo, no "historico borrado" (registrar_metrica ya
+    # confirma cada fila con commit propio segun se procesa, ver
+    # app/services/metricas.py).
+    _mockear_get_meta(monkeypatch, {
+        "act_123/insights::campaign": {"data": [{"campaign_id": "c1", "spend": "20.0", "impressions": "200", "reach": "190", "clicks": "2", "frequency": "1.0", "date_start": "2026-08-02", "date_stop": "2026-08-02"}]},
+        "act_123/insights::adset": MetaAPIError("User request limit reached", codigo=17, subcodigo=2446079, tipo="OAuthException"),
+    })
+
+    with client.application.app_context():
+        resumen3, error3 = sincronizar_insights(usuario_a_con_empresa["empresa_id"], datetime.date(2026, 8, 2), datetime.date(2026, 8, 2))
+        assert error3 is not None
+
+        filas = consultar_metricas(usuario_a_con_empresa["empresa_id"], metrica_nombre="spend")
+        valores = sorted(f.valor for f in filas)
+        assert valores == [10.0, 20.0]  # 08-01 (historico) + 08-02 (nuevo, ya confirmado antes del fallo de adset)

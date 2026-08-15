@@ -98,6 +98,23 @@ def clasificar_error_meta(excepcion):
     return "interno"
 
 
+def categoria_desde_mensaje(mensaje):
+    """Recupera la categoria a partir de un mensaje YA formateado por
+    mensaje_para_usuario() -- para cuando el llamador solo tiene el
+    mensaje de vuelta (ej. sincronizacion.py, que recibe el error de
+    sincronizar_insights/sincronizar_estructura como string, no como el
+    MetaAPIError original). Compara contra el prefijo EXACTO de
+    MENSAJES_CATEGORIA (una constante nuestra, no el texto libre de
+    Meta), asi que nunca es una adivinanza: o el mensaje empieza con
+    exactamente ese texto o no. None si no coincide con ninguna."""
+    if not mensaje:
+        return None
+    for categoria, texto in MENSAJES_CATEGORIA.items():
+        if mensaje.startswith(texto):
+            return categoria
+    return None
+
+
 def mensaje_para_usuario(categoria, excepcion=None):
     """`excepcion` es opcional -- si es un MetaAPIError con `uso_meta`
     (ver client.py::_extraer_uso_meta), se le agrega al mensaje generico
@@ -110,6 +127,19 @@ def mensaje_para_usuario(categoria, excepcion=None):
         detalle = _detalle_uso_meta(getattr(excepcion, "uso_meta", None))
         if detalle:
             mensaje = f"{mensaje} {detalle}"
+        # Paso 16.1: los porcentajes de arriba (si vinieron) son SOLO lo
+        # que Meta reporta en x-app-usage/x-ad-account-usage -- limites
+        # de llamadas normales. El limite especifico de Insights
+        # (Business Use Case) que produce el error "User request limit
+        # reached" en cuentas con poca actividad es OTRO limite, que no
+        # siempre viaja en esos mismos encabezados. Un 0% ahi NO
+        # significa "no hay ningun limite activo" -- decirlo tal cual
+        # evita que el usuario interprete el numero al reves.
+        mensaje = (
+            f"{mensaje} No se realizarán más consultas automáticas hasta que Meta libere el límite. "
+            "Nota: los porcentajes de arriba son la cuota general de la API, no reflejan necesariamente "
+            "el límite específico de Insights que produjo este error."
+        )
     return mensaje
 
 

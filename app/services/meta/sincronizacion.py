@@ -9,17 +9,58 @@ IDs (nunca objetos ORM en el closure), para que cambiar `encolar()`
 por una cola real despues no requiera tocar este modulo.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 MAX_INTENTOS = 3
+
+# Paso 16.1 (correccion de sincronizacion, punto 7): cuando la ULTIMA
+# sincronizacion de esta empresa termino en error "limite_api", no se
+# permite iniciar/reintentar otra hasta que pase este tiempo. Meta no
+# documenta un SLA exacto para el limite de Insights por cuenta de poca
+# actividad (ver insights_service.py) -- este valor es un enfriamiento
+# conservador propio, no un numero que Meta garantice, elegido para
+# evitar seguir golpeando la API mientras el limite sigue activo (punto
+# 7: "NO utilizar reintentos como sustituto de la correccion
+# arquitectonica").
+MINUTOS_ENFRIAMIENTO_LIMITE_API = 15
+
+ESTADOS_EN_CURSO = ("pendiente", "en_progreso")
+
+
+def _bloqueo_activo(empresa_id):
+    """None si se puede iniciar una sincronizacion nueva; si no, el
+    mensaje que explica por que no (punto 6: sincronizacion ya en
+    curso: punto 7: enfriamiento tras limite_api)."""
+    ultima = obtener_ultima_sincronizacion(empresa_id)
+    if ultima is None:
+        return None
+
+    if ultima.estado in ESTADOS_EN_CURSO:
+        return "Sincronización en progreso."
+
+    if ultima.estado == "error" and ultima.categoria_error == "limite_api" and ultima.finalizada_en is not None:
+        finalizada = ultima.finalizada_en
+        if finalizada.tzinfo is None:
+            finalizada = finalizada.replace(tzinfo=timezone.utc)
+        transcurrido = datetime.now(timezone.utc) - finalizada
+        restante = timedelta(minutes=MINUTOS_ENFRIAMIENTO_LIMITE_API) - transcurrido
+        if restante > timedelta(0):
+            minutos_restantes = max(1, int(restante.total_seconds() // 60) + 1)
+            return (
+                "Meta está limitando temporalmente las consultas de esta cuenta. "
+                f"No se realizarán más consultas hasta dentro de {minutos_restantes} minuto(s)."
+            )
+
+    return None
 
 
 def iniciar_sincronizacion(empresa_id, usuario_id, tipo, fecha_inicio, fecha_fin):
     """Crea la fila de SincronizacionMeta y ejecuta el trabajo (via
     encolar -- hoy sincrono). Devuelve (sincronizacion, error_o_None):
-    error_o_None viene de validaciones PREVIAS (ej. sin conexion), no
-    del resultado del trabajo en si -- para eso hay que releer el
-    estado de la sincronizacion devuelta."""
+    error_o_None viene de validaciones PREVIAS (ej. sin conexion, una
+    sincronizacion ya en curso, o enfriamiento tras limite_api -- ver
+    _bloqueo_activo), no del resultado del trabajo en si -- para eso
+    hay que releer el estado de la sincronizacion devuelta."""
     from app.extensions import db
     from app.models import SincronizacionMeta
     from app.services.meta.conexiones import obtener_conexion_activa
@@ -28,6 +69,10 @@ def iniciar_sincronizacion(empresa_id, usuario_id, tipo, fecha_inicio, fecha_fin
     conexion = obtener_conexion_activa(empresa_id)
     if conexion is None:
         return None, "No hay una conexión activa con Meta."
+
+    bloqueo = _bloqueo_activo(empresa_id)
+    if bloqueo:
+        return None, bloqueo
 
     sincronizacion = SincronizacionMeta(
         empresa_id=empresa_id,
@@ -93,9 +138,11 @@ def _ejecutar_sincronizacion(sincronizacion_id):
 
 def _marcar_error(sincronizacion, mensaje):
     from app.extensions import db
+    from app.services.meta.errores import categoria_desde_mensaje
 
     sincronizacion.estado = "error"
     sincronizacion.error_mensaje = (mensaje or "")[:500]
+    sincronizacion.categoria_error = categoria_desde_mensaje(mensaje)
     sincronizacion.finalizada_en = datetime.now(timezone.utc)
     db.session.commit()
 
@@ -118,6 +165,10 @@ def reintentar_sincronizacion(empresa_id, sincronizacion_id):
         return None, "Esta sincronización no está en estado de error."
     if sincronizacion.intentos >= MAX_INTENTOS:
         return None, f"Se alcanzó el máximo de {MAX_INTENTOS} intentos. Verifica la conexión e inicia una sincronización nueva."
+
+    bloqueo = _bloqueo_activo(empresa_id)
+    if bloqueo:
+        return None, bloqueo
 
     encolar(_ejecutar_sincronizacion, sincronizacion.id)
     sincronizacion_actualizada = db.session.get(SincronizacionMeta, sincronizacion_id)

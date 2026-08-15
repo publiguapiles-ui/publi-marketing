@@ -15,18 +15,31 @@ from tests.conftest import iniciar_sesion_de_prueba
 
 
 def _mockear_get_meta(monkeypatch, mapa_respuestas):
+    """El mapa acepta claves "ruta" (para endpoints que no dependen de
+    params, ej. .../campaigns) o "ruta::level" (para .../insights, que
+    desde el Paso 16.1 se llama UNA vez por nivel con el mismo `ruta` y
+    solo el parametro `level` los distingue -- ver insights_service.py)."""
     import app.services.meta.client as client_mod
 
-    def _resolver(ruta):
+    def _resolver(ruta, params=None):
+        params = params or {}
+        nivel = params.get("level")
+        if nivel:
+            clave_nivel = f"{ruta}::{nivel}"
+            for prefijo, respuesta in mapa_respuestas.items():
+                if clave_nivel == prefijo or clave_nivel.startswith(prefijo):
+                    if isinstance(respuesta, Exception):
+                        raise respuesta
+                    return respuesta
         for prefijo, respuesta in mapa_respuestas.items():
             if ruta == prefijo or ruta.startswith(prefijo):
                 if isinstance(respuesta, Exception):
                     raise respuesta
                 return respuesta
-        raise AssertionError(f"ruta inesperada en el mock: {ruta}")
+        raise AssertionError(f"ruta inesperada en el mock: {ruta} (level={nivel})")
 
-    monkeypatch.setattr(client_mod.MetaClient, "get", lambda self, ruta, params=None, access_token=None: _resolver(ruta))
-    monkeypatch.setattr(client_mod.MetaClient, "get_todas_las_paginas", lambda self, ruta, params=None, limite_paginas=20: _resolver(ruta).get("data", []))
+    monkeypatch.setattr(client_mod.MetaClient, "get", lambda self, ruta, params=None, access_token=None: _resolver(ruta, params))
+    monkeypatch.setattr(client_mod.MetaClient, "get_todas_las_paginas", lambda self, ruta, params=None, limite_paginas=20: _resolver(ruta, params).get("data", []))
 
 
 def _preparar_cuenta_vinculada(empresa_id, usuario_id):
@@ -306,7 +319,8 @@ def test_sincronizar_insights_extrae_conversiones_video_engagement_roas(client, 
     _mockear_get_meta(monkeypatch, {
         "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
         "c1/adsets": {"data": []},
-        "c1/insights": {"data": [{
+        "act_123/insights::campaign": {"data": [{
+            "campaign_id": "c1",
             "spend": "100.0", "impressions": "5000", "reach": "4000", "clicks": "50", "frequency": "1.25",
             "actions": [{"action_type": "purchase", "value": "4"}, {"action_type": "link_click", "value": "50"}],
             "action_values": [{"action_type": "purchase", "value": "400.0"}],
@@ -359,7 +373,7 @@ def test_sincronizar_insights_sin_datos_de_conversion_deja_metricas_en_none(clie
     _mockear_get_meta(monkeypatch, {
         "act_123/campaigns": {"data": [{"id": "c1", "name": "Campaña 1", "status": "ACTIVE", "effective_status": "ACTIVE"}]},
         "c1/adsets": {"data": []},
-        "c1/insights": {"data": [{"spend": "20.0", "impressions": "800", "reach": "700", "clicks": "8", "frequency": "1.1", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
+        "act_123/insights::campaign": {"data": [{"campaign_id": "c1", "spend": "20.0", "impressions": "800", "reach": "700", "clicks": "8", "frequency": "1.1", "date_start": "2026-08-01", "date_stop": "2026-08-01"}]},
     })
 
     with client.application.app_context():

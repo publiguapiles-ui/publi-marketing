@@ -93,7 +93,9 @@
     <h2 class="ps-seccion-titulo">Sincronización</h2>
     {% if ultima_sincronizacion %}
     <dl class="perfil-datos">
-      <dt>Última sincronización</dt>
+      <dt>Última sincronización exitosa</dt>
+      <dd>{{ conexion_activa.ultima_sincronizacion_en.strftime("%d/%m/%Y %H:%M") if conexion_activa.ultima_sincronizacion_en else "Ninguna todavía" }}</dd>
+      <dt>Último intento</dt>
       <dd>{{ ultima_sincronizacion.creado_en.strftime("%d/%m/%Y %H:%M") }}</dd>
       <dt>Estado</dt>
       <dd>
