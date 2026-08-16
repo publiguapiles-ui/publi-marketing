@@ -43,6 +43,17 @@
   <p id="pe-estado-mensaje" class="perfil-nota" hidden></p>
 </section>
 
+<section id="pe-decisiones">
+  <h2 class="ps-seccion-titulo">Decisiones clave</h2>
+  <p class="perfil-nota">Memoria estratégica del proyecto — el Estratega IA la respeta en cada conversación futura sobre este proyecto. No es el historial completo del chat, solo lo que el equipo marca como decidido.</p>
+  <div id="pe-lista-decisiones"></div>
+  <form id="form-nueva-decision" class="formulario-simple">
+    <label>Nueva decisión <input type="text" name="texto" placeholder="Priorizar Mensajes sobre Alcance en fase 2" required maxlength="500" /></label>
+    <button type="submit" class="boton-primario">Registrar decisión</button>
+    <p id="nueva-decision-mensaje" class="perfil-nota" hidden></p>
+  </form>
+</section>
+
 <section id="pe-diagnostico">
   <h2 class="ps-seccion-titulo">Diagnóstico (Paso 8)</h2>
   {% if not datos.proyecto.cuenta_publicitaria_id %}
@@ -259,6 +270,7 @@
   window.DM_PROYECTO_FASE_ELIMINAR_URL_BASE = "{{ url_for('datos_meta.proyectos_estrategicos_eliminar_fase', proyecto_id=datos.proyecto.id, fase_id=0) }}".replace("/0/eliminar", "/__ID__/eliminar");
   window.DM_PROYECTO_SECUENCIA_URL = "{{ url_for('datos_meta.proyectos_estrategicos_agregar_secuencia', proyecto_id=datos.proyecto.id) }}";
   window.DM_PROYECTO_SECUENCIA_ELIMINAR_URL_BASE = "{{ url_for('datos_meta.proyectos_estrategicos_eliminar_secuencia', proyecto_id=datos.proyecto.id, paso_id=0) }}".replace("/0/eliminar", "/__ID__/eliminar");
+  window.DM_PROYECTO_DECISIONES_URL = "{{ url_for('datos_meta.proyectos_estrategicos_agregar_decision', proyecto_id=datos.proyecto.id) }}";
 </script>
 <script src="{{ url_for('static', filename='js/datos_meta_proyectos_estrategicos.js') }}"></script>
 {% endblock %}

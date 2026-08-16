@@ -1227,6 +1227,7 @@ def _serializar_proyecto_estrategico(proyecto):
         "restricciones": proyecto.restricciones,
         "cuenta_publicitaria_id": proyecto.cuenta_publicitaria_id,
         "estado": proyecto.estado,
+        "decisiones_clave": list(proyecto.decisiones_clave or []),
     }
 
 
@@ -1385,6 +1386,21 @@ def proyectos_estrategicos_cambiar_estado(proyecto_id):
     if error:
         return jsonify({"ok": False, "error": error}), 400
     return jsonify({"ok": True, "estado": proyecto.estado})
+
+
+@datos_meta_bp.post("/proyectos-estrategicos/<int:proyecto_id>/decisiones")
+@login_required
+def proyectos_estrategicos_agregar_decision(proyecto_id):
+    from app.services.meta.proyectos_estrategicos import agregar_decision_clave
+
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+    datos = request.get_json(silent=True) or {}
+
+    proyecto, error = agregar_decision_clave(empresa.id, proyecto_id, datos.get("texto"), usuario["id"])
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, "decisiones_clave": proyecto.decisiones_clave}), 201
 
 
 @datos_meta_bp.post("/proyectos-estrategicos/<int:proyecto_id>/fases")
