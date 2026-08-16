@@ -12,7 +12,6 @@ ESTADOS_PROYECTO_ESTRATEGICO = [
     "planificado",
     "aprobado",
     "en_ejecucion",
-    "en_revision",  # Paso 3 (Inteligencia de Marketing): revisar resultados a mitad de proyecto, antes de finalizar
     "finalizado",
     "pausado",
 ]
@@ -68,16 +67,6 @@ class ProyectoEstrategico(db.Model):
     restricciones = db.Column(db.Text, nullable=True)
 
     estado = db.Column(db.String(20), nullable=False, default="borrador")
-
-    # Paso 3 (Inteligencia de Marketing), "memoria estrategica": lista
-    # de {"texto": str, "creado_en": iso8601, "usuario_id": str|None} --
-    # decisiones importantes del proyecto (ej. "se decidio priorizar
-    # ventas sobre alcance"), NUNCA el historial completo de mensajes
-    # del chat (eso ya vive en MensajeIA) -- solo lo que alguien marco
-    # explicitamente como decision, para que una conversacion nueva
-    # sobre este proyecto tenga ese contexto sin tener que releer todo
-    # el chat viejo.
-    decisiones_clave = db.Column(db.JSON, nullable=False, default=list)
 
     creado_por = db.Column(db.String(36), db.ForeignKey("usuarios.id"), nullable=True)
     creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

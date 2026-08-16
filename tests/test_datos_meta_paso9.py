@@ -357,7 +357,7 @@ def test_eliminar_paso_secuencia(client, usuario_a_con_empresa):
 
 # --- Estados: los 6 del Paso 9 ---------------------------------------------------------
 
-def test_cambiar_estado_recorre_todos_los_estados(client, usuario_a_con_empresa):
+def test_cambiar_estado_recorre_los_seis_estados(client, usuario_a_con_empresa):
     from app.services.meta.proyectos_estrategicos import cambiar_estado_proyecto, crear_proyecto
 
     with client.application.app_context():
@@ -365,9 +365,7 @@ def test_cambiar_estado_recorre_todos_los_estados(client, usuario_a_con_empresa)
         proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
         assert proyecto.estado == "borrador"
 
-        # "en_revision" (Paso 3: Inteligencia de Marketing) se suma a
-        # los seis estados originales del Paso 9.
-        for estado in ["planificado", "aprobado", "en_ejecucion", "en_revision", "pausado", "finalizado"]:
+        for estado in ["planificado", "aprobado", "en_ejecucion", "pausado", "finalizado"]:
             actualizado, error = cambiar_estado_proyecto(empresa_id, proyecto.id, estado)
             assert error is None
             assert actualizado.estado == estado
@@ -474,8 +472,7 @@ def test_informe_estructurado_incluye_todas_las_secciones(client, usuario_a_con_
 
         informe = construir_informe_estructurado(proyecto)
         for clave in ("empresa", "objetivo", "presupuesto", "periodo", "diagnostico", "oportunidades", "alertas",
-                      "fases", "audiencias_disponibles", "secuencia", "kpi", "metas", "contenido_requerido", "resultados_reales",
-                      "decisiones_clave"):
+                      "fases", "audiencias_disponibles", "secuencia", "kpi", "metas", "contenido_requerido", "resultados_reales"):
             assert clave in informe
         assert informe["empresa"]["id"] == empresa_id
         assert len(informe["fases"]) == 1
@@ -580,150 +577,7 @@ def test_ruta_crear_proyecto_end_to_end(client, usuario_a_con_empresa):
     assert resp_estado.status_code == 200
     assert resp_estado.get_json()["estado"] == "planificado"
 
-    resp_decision = client.post(
-        f"/datos-meta/proyectos-estrategicos/{proyecto_id}/decisiones",
-        json={"texto": "Priorizar mensajes iniciados sobre alcance."},
-    )
-    assert resp_decision.status_code == 201
-    datos_decision = resp_decision.get_json()
-    assert datos_decision["ok"] is True
-    assert datos_decision["decisiones_clave"][0]["texto"] == "Priorizar mensajes iniciados sobre alcance."
-
     resp_detalle_2 = client.get(f"/datos-meta/proyectos-estrategicos/{proyecto_id}")
     texto2 = resp_detalle_2.get_data(as_text=True)
     assert "Reconocimiento" in texto2
     assert "VIDEO 1" in texto2
-    assert "Priorizar mensajes iniciados sobre alcance." in texto2
-
-
-# --- Memoria estrategica (Paso 3: Inteligencia de Marketing) -------------------------
-
-def test_agregar_decision_clave_exitosa(client, usuario_a_con_empresa):
-    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
-
-    with client.application.app_context():
-        empresa_id = usuario_a_con_empresa["empresa_id"]
-        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
-
-        actualizado, error = agregar_decision_clave(empresa_id, proyecto.id, "Se decidió priorizar ventas sobre alcance.", usuario_a_con_empresa["usuario_id"])
-        assert error is None
-        assert len(actualizado.decisiones_clave) == 1
-        assert actualizado.decisiones_clave[0]["texto"] == "Se decidió priorizar ventas sobre alcance."
-        assert actualizado.decisiones_clave[0]["usuario_id"] == usuario_a_con_empresa["usuario_id"]
-        assert actualizado.decisiones_clave[0]["creado_en"]  # se registra cuando se tomo la decision
-
-
-def test_agregar_decision_clave_vacia_rechazada(client, usuario_a_con_empresa):
-    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
-
-    with client.application.app_context():
-        empresa_id = usuario_a_con_empresa["empresa_id"]
-        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
-
-        actualizado, error = agregar_decision_clave(empresa_id, proyecto.id, "   ", usuario_a_con_empresa["usuario_id"])
-        assert actualizado is None
-        assert error is not None
-
-
-def test_agregar_decision_clave_de_otra_empresa_rechazada(client, usuario_a_con_empresa, usuario_b_con_empresa):
-    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
-
-    with client.application.app_context():
-        proyecto, _ = crear_proyecto(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], _datos_proyecto())
-
-        actualizado, error = agregar_decision_clave(usuario_b_con_empresa["empresa_id"], proyecto.id, "Intento cruzado.", usuario_b_con_empresa["usuario_id"])
-        assert actualizado is None
-        assert error is not None
-
-
-def test_ruta_agregar_decision_vacia_da_400(client, usuario_a_con_empresa):
-    from app.services.meta.proyectos_estrategicos import crear_proyecto
-
-    with client.application.app_context():
-        proyecto, _ = crear_proyecto(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], _datos_proyecto())
-        proyecto_id = proyecto.id
-
-    resp = client.post(f"/datos-meta/proyectos-estrategicos/{proyecto_id}/decisiones", json={"texto": "   "})
-    assert resp.status_code == 400
-    assert resp.get_json()["ok"] is False
-
-
-def test_ruta_agregar_decision_a_proyecto_de_otra_empresa_da_400(client, usuario_a_con_empresa, usuario_b_con_empresa):
-    from app.services.meta.proyectos_estrategicos import crear_proyecto
-
-    with client.application.app_context():
-        proyecto, _ = crear_proyecto(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], _datos_proyecto())
-        proyecto_id = proyecto.id
-
-    iniciar_sesion_de_prueba(client, usuario_b_con_empresa["usuario_id"], "b@example.com")
-    resp = client.post(f"/datos-meta/proyectos-estrategicos/{proyecto_id}/decisiones", json={"texto": "Intento cruzado."})
-    assert resp.status_code == 400
-    assert resp.get_json()["ok"] is False
-
-
-def test_listar_decisiones_clave_preserva_orden(client, usuario_a_con_empresa):
-    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto, listar_decisiones_clave
-
-    with client.application.app_context():
-        empresa_id = usuario_a_con_empresa["empresa_id"]
-        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
-        agregar_decision_clave(empresa_id, proyecto.id, "Primera decisión.")
-        agregar_decision_clave(empresa_id, proyecto.id, "Segunda decisión.")
-
-        decisiones = listar_decisiones_clave(empresa_id, proyecto.id)
-        assert [d["texto"] for d in decisiones] == ["Primera decisión.", "Segunda decisión."]
-
-
-def test_listar_decisiones_clave_proyecto_inexistente_es_none(client, usuario_a_con_empresa):
-    from app.services.meta.proyectos_estrategicos import listar_decisiones_clave
-
-    with client.application.app_context():
-        assert listar_decisiones_clave(usuario_a_con_empresa["empresa_id"], 999999) is None
-
-
-def test_decisiones_clave_aparecen_en_el_informe_estructurado(client, usuario_a_con_empresa):
-    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, construir_informe_estructurado, crear_proyecto
-
-    with client.application.app_context():
-        empresa_id = usuario_a_con_empresa["empresa_id"]
-        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
-        agregar_decision_clave(empresa_id, proyecto.id, "Probar remarketing primero.")
-
-        from app.extensions import db
-        db.session.refresh(proyecto)
-
-        informe = construir_informe_estructurado(proyecto)
-        assert informe["decisiones_clave"][0]["texto"] == "Probar remarketing primero."
-
-
-def test_decisiones_clave_se_incluyen_en_el_contexto_de_claude(client, usuario_a_con_empresa):
-    """El texto que se le envia al modelo (estratega_ia.py) debe
-    mencionar las decisiones ya tomadas del proyecto -- para que una
-    conversacion nueva no las ignore (Paso 3, memoria estrategica)."""
-    from app.services.estratega_ia import construir_contexto
-    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
-
-    with client.application.app_context():
-        empresa_id = usuario_a_con_empresa["empresa_id"]
-        empresa = db_query_empresa(empresa_id)
-        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
-        agregar_decision_clave(empresa_id, proyecto.id, "Se aprobó un presupuesto de prueba de ₡100.000.")
-
-        from app.extensions import db
-        db.session.refresh(proyecto)
-
-        informe, resumen, error = construir_contexto(empresa, proyecto=proyecto)
-        assert error is None
-
-        from app.services.estratega_ia import _formatear_contexto_para_prompt
-
-        texto = _formatear_contexto_para_prompt(informe, resumen["fuente"], proyecto=proyecto)
-        assert "Se aprobó un presupuesto de prueba de ₡100.000." in texto
-        assert "DECISIONES CLAVE" in texto
-
-
-def db_query_empresa(empresa_id):
-    from app.extensions import db
-    from app.models import Empresa
-
-    return db.session.query(Empresa).filter_by(id=empresa_id).first()

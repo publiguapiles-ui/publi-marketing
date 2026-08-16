@@ -122,47 +122,6 @@ def cambiar_estado_proyecto(empresa_id, proyecto_id, nuevo_estado):
     return proyecto, None
 
 
-# --- Memoria estrategica (Paso 3: Inteligencia de Marketing) --------------------------
-
-MAX_DECISIONES_CLAVE = 30  # evita que la lista crezca sin limite -- solo lo mas reciente sigue siendo relevante
-
-
-def agregar_decision_clave(empresa_id, proyecto_id, texto, usuario_id=None):
-    """(proyecto_o_None, error_o_None). Guarda una decision importante
-    del proyecto EN TEXTO LIBRE (ej. "se decidio priorizar ventas sobre
-    alcance") -- nunca el historial completo del chat, solo lo que se
-    marco explicitamente como decision, para que conversaciones futuras
-    sobre este proyecto tengan ese contexto sin releer todo el chat."""
-    from datetime import datetime, timezone
-
-    from app.extensions import db
-
-    texto = (texto or "").strip()
-    if not texto:
-        return None, "La decisión no puede estar vacía."
-
-    proyecto = obtener_proyecto(empresa_id, proyecto_id)
-    if proyecto is None:
-        return None, "El proyecto no existe o no pertenece a esta empresa."
-
-    decisiones = list(proyecto.decisiones_clave or [])
-    decisiones.append({
-        "texto": texto[:500],
-        "creado_en": datetime.now(timezone.utc).isoformat(),
-        "usuario_id": usuario_id,
-    })
-    proyecto.decisiones_clave = decisiones[-MAX_DECISIONES_CLAVE:]
-    db.session.commit()
-    return proyecto, None
-
-
-def listar_decisiones_clave(empresa_id, proyecto_id):
-    proyecto = obtener_proyecto(empresa_id, proyecto_id)
-    if proyecto is None:
-        return None
-    return list(proyecto.decisiones_clave or [])
-
-
 def resumen_presupuesto_proyecto(proyecto):
     """Total / asignado (suma de fases) / disponible / % asignado --
     Paso 9, punto 4. El presupuesto asignado NUNCA puede superar el
@@ -462,5 +421,4 @@ def construir_informe_estructurado(proyecto):
         "metas": {"resultado_objetivo": proyecto.resultado_objetivo},
         "contenido_requerido": [p.contenido for p in proyecto.secuencia],
         "resultados_reales": seguimiento,
-        "decisiones_clave": list(proyecto.decisiones_clave or []),
     }
