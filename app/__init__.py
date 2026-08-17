@@ -17,6 +17,44 @@ class ErrorConfiguracion(RuntimeError):
     """Falta una variable de entorno obligatoria para este entorno."""
 
 
+# Clave arbitraria fija para el advisory lock de Postgres (ver
+# _ejecutar_migraciones_con_bloqueo). Puede ser cualquier bigint; solo
+# debe ser estable entre despliegues.
+_CLAVE_BLOQUEO_MIGRACIONES = 727100
+
+
+def _ejecutar_migraciones_con_bloqueo(upgrade):
+    """Corre flask_migrate.upgrade() protegido por un advisory lock de
+    Postgres cuando la base es Postgres (produccion) -- gunicorn arranca
+    varios workers (--workers 2, Procfile) que importan run.py y llaman
+    create_app() en paralelo, y cada uno intentaria correr las mismas
+    migraciones Alembic al mismo tiempo sin este bloqueo. Causa raiz
+    real de la caida en produccion del primer intento del Paso 3
+    (memoria estrategica, revertido): dos workers ejecutando la misma
+    ALTER TABLE ... ADD COLUMN a la vez, uno bloqueado esperando al otro
+    hasta que el pooler de Supabase cerraba la conexion por inactividad,
+    lanzando una excepcion que tumbaba el worker (gunicorn exit code 3,
+    "Worker failed to boot", en bucle). Con el advisory lock, el segundo
+    worker espera a que el primero termine y libere el lock -- para
+    entonces Alembic ya ve la revision al dia y upgrade() no hace nada.
+    En SQLite (desarrollo/tests) no hace falta: cada proceso de test usa
+    su propia base, sin concurrencia real entre procesos.
+    """
+    if db.engine.dialect.name != "postgresql":
+        upgrade()
+        return
+
+    conexion = db.engine.connect()
+    try:
+        conexion.execute(text("SELECT pg_advisory_lock(:clave)"), {"clave": _CLAVE_BLOQUEO_MIGRACIONES})
+        try:
+            upgrade()
+        finally:
+            conexion.execute(text("SELECT pg_advisory_unlock(:clave)"), {"clave": _CLAVE_BLOQUEO_MIGRACIONES})
+    finally:
+        conexion.close()
+
+
 def create_app(nombre_config=None):
     os.makedirs(INSTANCE_DIR, exist_ok=True)
 
@@ -47,7 +85,7 @@ def create_app(nombre_config=None):
         with app.app_context():
             from flask_migrate import upgrade
 
-            upgrade()
+            _ejecutar_migraciones_con_bloqueo(upgrade)
 
             # Idempotente: crea los 11 presets de sistema (Paso 10) si
             # todavia no existen. Va aqui (no en la migracion) porque
