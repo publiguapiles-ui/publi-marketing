@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, url_for
 from sqlalchemy import text
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import INSTANCE_DIR, config_por_nombre
 from app.core.auth import obtener_usuario_actual
@@ -59,6 +60,12 @@ def create_app(nombre_config=None):
     os.makedirs(INSTANCE_DIR, exist_ok=True)
 
     app = Flask(__name__)
+    # Railway termina TLS en su proxy y reenvia HTTP simple al contenedor,
+    # asi que sin esto request.scheme (y por lo tanto url_for(_external=True),
+    # usado por ejemplo para la URL del webhook de WhatsApp) queda en
+    # "http://" en produccion aunque el sitio publico sea https. Confia en
+    # un solo hop de proxy (el de Railway).
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     nombre_config = nombre_config or os.environ.get("FLASK_ENV", "development")
     config_clase = config_por_nombre[nombre_config]
