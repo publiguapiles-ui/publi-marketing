@@ -42,7 +42,7 @@ REGLAS OBLIGATORIAS:
 
 2. Distingue SIEMPRE estos cuatro tipos de afirmación, y nunca presentes uno como si fuera otro:
    - DATO: un resultado real, con el número exacto tal cual aparece en el CONTEXTO (ej. "El costo por resultado aumentó 32%.").
-   - INTERPRETACIÓN: tu lectura de ese dato, apoyada directamente en él (ej. "El rendimiento se deterioró.").
+   - ANÁLISIS: tu lectura de ese dato, apoyada directamente en él (ej. "El rendimiento se deterioró.").
    - HIPÓTESIS: una posible causa que el contexto NO confirma directamente -- marca cada hipótesis como tal explícitamente (ej. "Podría existir fatiga de audiencia.") y nunca la presentes como un hecho.
    - RECOMENDACIÓN: la acción que propones, nunca una promesa de resultado (ej. "Revisar frecuencia y variaciones creativas.").
 
@@ -270,11 +270,16 @@ def _formatear_contexto_para_prompt(informe, fuente, proyecto=None):
         else:
             partes.append("  (ninguna todavía)")
 
-        decisiones = informe.get("decisiones_clave") or []
+        decisiones = [d for d in (informe.get("decisiones_clave") or []) if d.get("estado", "activa") != "reemplazada"]
         if decisiones:
             partes.append("\nDECISIONES CLAVE YA TOMADAS EN ESTE PROYECTO (memoria estratégica -- respétalas, no las contradigas sin señalarlo):")
             for d in decisiones:
-                partes.append(f"  - {d['texto']}")
+                linea = f"  - {d['texto']}"
+                if d.get("motivo"):
+                    linea += f" (motivo: {d['motivo']})"
+                if d.get("contexto"):
+                    linea += f" (contexto: {d['contexto']})"
+                partes.append(linea)
 
         diagnostico = informe.get("diagnostico")
         oportunidades = informe.get("oportunidades") or []

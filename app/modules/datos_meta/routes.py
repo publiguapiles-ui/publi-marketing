@@ -1397,7 +1397,10 @@ def proyectos_estrategicos_agregar_decision(proyecto_id):
     usuario = obtener_usuario_actual()
     datos = request.get_json(silent=True) or {}
 
-    proyecto, error = agregar_decision_clave(empresa.id, proyecto_id, datos.get("texto"), usuario["id"])
+    proyecto, error = agregar_decision_clave(
+        empresa.id, proyecto_id, datos.get("texto"), usuario["id"],
+        contexto=datos.get("contexto"), motivo=datos.get("motivo"),
+    )
     if error:
         return jsonify({"ok": False, "error": error}), 400
     return jsonify({"ok": True, "decisiones_clave": proyecto.decisiones_clave}), 201

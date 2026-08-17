@@ -127,12 +127,23 @@ def cambiar_estado_proyecto(empresa_id, proyecto_id, nuevo_estado):
 MAX_DECISIONES_CLAVE = 30  # evita que la lista crezca sin limite -- solo lo mas reciente sigue siendo relevante
 
 
-def agregar_decision_clave(empresa_id, proyecto_id, texto, usuario_id=None):
+ESTADOS_DECISION_CLAVE = ["activa", "reemplazada", "cerrada"]
+
+
+def agregar_decision_clave(empresa_id, proyecto_id, texto, usuario_id=None, contexto=None, motivo=None, estado="activa"):
     """(proyecto_o_None, error_o_None). Guarda una decision importante
     del proyecto EN TEXTO LIBRE (ej. "se decidio priorizar ventas sobre
     alcance") -- nunca el historial completo del chat, solo lo que se
     marco explicitamente como decision, para que conversaciones futuras
-    sobre este proyecto tengan ese contexto sin releer todo el chat."""
+    sobre este proyecto tengan ese contexto sin releer todo el chat.
+
+    `contexto` y `motivo` son opcionales (texto libre, ej. "tras la
+    caida de CTR en la campaña B" / "para proteger el margen"); cuando
+    se dan, se le muestran a Claude junto con la decision (ver
+    estratega_ia.py::_formatear_contexto_para_prompt). `proyecto_id` y
+    `empresa_id` se guardan tambien dentro de cada entrada -- son
+    redundantes con el proyecto contenedor, pero dejan cada decision
+    auditable por si sola (Paso 3, cierre)."""
     from datetime import datetime, timezone
 
     from app.extensions import db
@@ -141,6 +152,9 @@ def agregar_decision_clave(empresa_id, proyecto_id, texto, usuario_id=None):
     if not texto:
         return None, "La decisión no puede estar vacía."
 
+    if estado not in ESTADOS_DECISION_CLAVE:
+        return None, "El estado de la decisión no es válido."
+
     proyecto = obtener_proyecto(empresa_id, proyecto_id)
     if proyecto is None:
         return None, "El proyecto no existe o no pertenece a esta empresa."
@@ -148,8 +162,13 @@ def agregar_decision_clave(empresa_id, proyecto_id, texto, usuario_id=None):
     decisiones = list(proyecto.decisiones_clave or [])
     decisiones.append({
         "texto": texto[:500],
+        "contexto": (contexto or "").strip()[:500] or None,
+        "motivo": (motivo or "").strip()[:500] or None,
+        "estado": estado,
         "creado_en": datetime.now(timezone.utc).isoformat(),
         "usuario_id": usuario_id,
+        "proyecto_id": proyecto.id,
+        "empresa_id": empresa_id,
     })
     proyecto.decisiones_clave = decisiones[-MAX_DECISIONES_CLAVE:]
     db.session.commit()

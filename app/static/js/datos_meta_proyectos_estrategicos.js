@@ -235,6 +235,8 @@
     decisiones.forEach((d) => {
       const item = crear("li");
       item.appendChild(crear("p", null, d.texto));
+      if (d.motivo) item.appendChild(crear("p", "perfil-nota", `Motivo: ${d.motivo}`));
+      if (d.contexto) item.appendChild(crear("p", "perfil-nota", `Contexto: ${d.contexto}`));
       item.appendChild(crear("p", "perfil-nota", formatearFecha(d.creado_en)));
       lista.appendChild(item);
     });
@@ -245,13 +247,15 @@
     evento.preventDefault();
     const form = evento.target;
     const texto = form.querySelector('[name="texto"]').value;
+    const motivo = form.querySelector('[name="motivo"]').value;
+    const contexto = form.querySelector('[name="contexto"]').value;
 
     const mensaje = document.getElementById("nueva-decision-mensaje");
     try {
       const resp = await fetch(window.DM_PROYECTO_DECISIONES_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto }),
+        body: JSON.stringify({ texto, motivo, contexto }),
       });
       const datos = await resp.json();
       if (!datos.ok) {

@@ -442,3 +442,52 @@ def test_ruta_crear_conversacion_y_enviar_mensaje_end_to_end(client, usuario_a_c
     assert resp_detalle.status_code == 200
     mensajes = resp_detalle.get_json()["mensajes"]
     assert len(mensajes) == 2
+
+
+# --- Cierre del Paso 3: el prompt (REGLAS_SISTEMA) instruye las 4 piezas consolidadas ---
+#
+# Estos tests verifican que las INSTRUCCIONES que se le envian a Claude
+# existen y son correctas -- NUNCA que Claude las cumpla en la practica,
+# eso requiere ANTHROPIC_API_KEY configurada en produccion (punto 5/7
+# del cierre) y no se puede probar aqui.
+
+def test_reglas_sistema_distingue_dato_analisis_hipotesis_recomendacion():
+    from app.services.estratega_ia import REGLAS_SISTEMA
+
+    for etiqueta in ("DATO:", "ANÁLISIS:", "HIPÓTESIS:", "RECOMENDACIÓN:"):
+        assert etiqueta in REGLAS_SISTEMA
+    assert "nunca la presentes como un hecho" in REGLAS_SISTEMA.lower()
+
+
+def test_reglas_sistema_incluye_respuesta_estrategica_completa():
+    from app.services.estratega_ia import REGLAS_SISTEMA
+
+    for encabezado in ("RESUMEN", "HALLAZGOS", "EVIDENCIA", "OPORTUNIDADES", "RIESGOS", "RECOMENDACIÓN", "PRÓXIMO PASO"):
+        assert encabezado in REGLAS_SISTEMA
+
+
+def test_reglas_sistema_no_obliga_estructura_completa_en_preguntas_simples():
+    from app.services.estratega_ia import REGLAS_SISTEMA
+
+    assert "preguntas simples" in REGLAS_SISTEMA.lower()
+    assert "sin forzar esta estructura" in REGLAS_SISTEMA.lower()
+
+
+def test_reglas_sistema_incluye_modo_simple_y_profesional():
+    from app.services.estratega_ia import REGLAS_SISTEMA
+
+    assert "MODO SIMPLE" in REGLAS_SISTEMA
+    assert "MODO PROFESIONAL" in REGLAS_SISTEMA
+    assert "nunca te niegues a simplificar ni a profundizar" in REGLAS_SISTEMA.lower()
+
+
+def test_reglas_sistema_nunca_inventa_datos():
+    from app.services.estratega_ia import REGLAS_SISTEMA
+
+    assert "NUNCA inventes" in REGLAS_SISTEMA
+
+
+def test_reglas_sistema_nunca_ejecuta_cambios_en_meta():
+    from app.services.estratega_ia import REGLAS_SISTEMA
+
+    assert "no puedes crear, modificar ni publicar nada en meta" in REGLAS_SISTEMA.lower()

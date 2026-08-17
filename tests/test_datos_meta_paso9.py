@@ -613,6 +613,60 @@ def test_agregar_decision_clave_exitosa(client, usuario_a_con_empresa):
         assert actualizado.decisiones_clave[0]["creado_en"]  # se registra cuando se tomo la decision
 
 
+def test_agregar_decision_clave_con_contexto_motivo_y_estado(client, usuario_a_con_empresa):
+    """Cierre del Paso 3: la memoria estrategica debe poder guardar
+    contexto, motivo y estado -- no solo el texto de la decision."""
+    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
+
+        actualizado, error = agregar_decision_clave(
+            empresa_id, proyecto.id, "Se aprobó presupuesto de ₡100.000.",
+            usuario_a_con_empresa["usuario_id"],
+            contexto="Tras revisar el diagnóstico de la cuenta.",
+            motivo="Para probar remarketing antes de escalar.",
+        )
+        assert error is None
+        decision = actualizado.decisiones_clave[0]
+        assert decision["contexto"] == "Tras revisar el diagnóstico de la cuenta."
+        assert decision["motivo"] == "Para probar remarketing antes de escalar."
+        assert decision["estado"] == "activa"  # por defecto
+        # auditable por si sola, aunque ya viva dentro del proyecto:
+        assert decision["proyecto_id"] == proyecto.id
+        assert decision["empresa_id"] == empresa_id
+
+
+def test_agregar_decision_clave_estado_invalido_rechazado(client, usuario_a_con_empresa):
+    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
+
+        actualizado, error = agregar_decision_clave(empresa_id, proyecto.id, "Texto", estado="no_existe")
+        assert actualizado is None
+        assert error is not None
+
+
+def test_agregar_decision_clave_sin_contexto_ni_motivo_es_compatible(client, usuario_a_con_empresa):
+    """Compatibilidad con proyectos existentes: seguir permitiendo
+    registrar una decision solo con texto, igual que antes de este
+    cierre -- contexto/motivo quedan en None, no en string vacio."""
+    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
+
+        actualizado, error = agregar_decision_clave(empresa_id, proyecto.id, "Solo el texto.")
+        assert error is None
+        decision = actualizado.decisiones_clave[0]
+        assert decision["contexto"] is None
+        assert decision["motivo"] is None
+
+
 def test_agregar_decision_clave_vacia_rechazada(client, usuario_a_con_empresa):
     from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
 
@@ -720,6 +774,55 @@ def test_decisiones_clave_se_incluyen_en_el_contexto_de_claude(client, usuario_a
         texto = _formatear_contexto_para_prompt(informe, resumen["fuente"], proyecto=proyecto)
         assert "Se aprobó un presupuesto de prueba de ₡100.000." in texto
         assert "DECISIONES CLAVE" in texto
+
+
+def test_contexto_de_claude_incluye_motivo_y_contexto_de_la_decision(client, usuario_a_con_empresa):
+    """Cierre del Paso 3: Claude debe poder consultar tambien el motivo
+    y el contexto de cada decision, no solo el texto -- para que su
+    analisis futuro entienda POR QUE se decidio algo."""
+    from app.services.estratega_ia import _formatear_contexto_para_prompt, construir_contexto
+    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        empresa = db_query_empresa(empresa_id)
+        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
+        agregar_decision_clave(
+            empresa_id, proyecto.id, "Probar remarketing.",
+            contexto="Tras detectar audiencia fría con bajo rendimiento.",
+            motivo="Para reducir el costo por resultado.",
+        )
+
+        from app.extensions import db
+        db.session.refresh(proyecto)
+
+        informe, resumen, _error = construir_contexto(empresa, proyecto=proyecto)
+        texto = _formatear_contexto_para_prompt(informe, resumen["fuente"], proyecto=proyecto)
+        assert "Para reducir el costo por resultado" in texto
+        assert "Tras detectar audiencia fría con bajo rendimiento" in texto
+
+
+def test_decision_reemplazada_no_aparece_en_contexto_de_claude(client, usuario_a_con_empresa):
+    """Una decision marcada 'reemplazada' ya no debe presentarse a
+    Claude como vigente -- evita que respete una decision que el
+    equipo ya dejo sin efecto."""
+    from app.services.estratega_ia import _formatear_contexto_para_prompt, construir_contexto
+    from app.services.meta.proyectos_estrategicos import agregar_decision_clave, crear_proyecto
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        empresa = db_query_empresa(empresa_id)
+        proyecto, _ = crear_proyecto(empresa_id, usuario_a_con_empresa["usuario_id"], _datos_proyecto())
+        agregar_decision_clave(empresa_id, proyecto.id, "Decisión ya reemplazada.", estado="reemplazada")
+        agregar_decision_clave(empresa_id, proyecto.id, "Decisión vigente.")
+
+        from app.extensions import db
+        db.session.refresh(proyecto)
+
+        informe, resumen, _error = construir_contexto(empresa, proyecto=proyecto)
+        texto = _formatear_contexto_para_prompt(informe, resumen["fuente"], proyecto=proyecto)
+        assert "Decisión vigente." in texto
+        assert "Decisión ya reemplazada." not in texto
 
 
 def db_query_empresa(empresa_id):
