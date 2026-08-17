@@ -213,6 +213,61 @@
     boton.disabled = false;
   }
 
+  // --- Pagina de detalle: decisiones clave (memoria estrategica, Paso 3) ------------
+
+  function formatearFecha(iso) {
+    try {
+      return new Date(iso).toLocaleString("es-CR", { dateStyle: "medium", timeStyle: "short" });
+    } catch (err) {
+      return iso;
+    }
+  }
+
+  function renderDecisiones(decisiones) {
+    const cont = document.getElementById("pe-lista-decisiones");
+    if (!cont) return;
+    cont.innerHTML = "";
+    if (!decisiones || !decisiones.length) {
+      cont.appendChild(crear("p", "perfil-nota", "Todavía no se ha registrado ninguna decisión clave para este proyecto."));
+      return;
+    }
+    const lista = crear("ul", "pe-lista-decisiones-clave");
+    decisiones.forEach((d) => {
+      const item = crear("li");
+      item.appendChild(crear("p", null, d.texto));
+      item.appendChild(crear("p", "perfil-nota", formatearFecha(d.creado_en)));
+      lista.appendChild(item);
+    });
+    cont.appendChild(lista);
+  }
+
+  async function agregarDecision(evento) {
+    evento.preventDefault();
+    const form = evento.target;
+    const texto = form.querySelector('[name="texto"]').value;
+
+    const mensaje = document.getElementById("nueva-decision-mensaje");
+    try {
+      const resp = await fetch(window.DM_PROYECTO_DECISIONES_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto }),
+      });
+      const datos = await resp.json();
+      if (!datos.ok) {
+        mensaje.hidden = false;
+        mensaje.textContent = datos.error;
+        return;
+      }
+      mensaje.hidden = true;
+      form.reset();
+      renderDecisiones(datos.decisiones_clave);
+    } catch (err) {
+      mensaje.hidden = false;
+      mensaje.textContent = "Error de conexión al registrar la decisión.";
+    }
+  }
+
   // --- Pagina de detalle: estado, fases, secuencia -----------------------------------
 
   async function cambiarEstado() {
@@ -320,6 +375,10 @@
 
   function inicializarDetalle() {
     renderDiagnosticoCompleto(window.DM_PROYECTO_DATOS);
+    renderDecisiones(window.DM_PROYECTO_DATOS.proyecto.decisiones_clave);
+
+    const formDecision = document.getElementById("form-nueva-decision");
+    if (formDecision) formDecision.addEventListener("submit", agregarDecision);
 
     const selectorEstado = document.getElementById("pe-selector-estado");
     if (selectorEstado) selectorEstado.addEventListener("change", cambiarEstado);
