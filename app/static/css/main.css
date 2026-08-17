@@ -367,6 +367,55 @@ body {
 .estado-badge-critico { background: #fee2e2; color: #991b1b; }
 .estado-badge-sin_datos { background: #f3f4f6; color: #6b7280; }
 
+/* API WhatsApp: panel de conversaciones pendientes */
+.ww-estado-conectada { background: #dcfce7; color: #166534; }
+.ww-estado-desconectada { background: #f3f4f6; color: #6b7280; }
+
+.ww-bloques {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.ww-bloque-numero {
+  flex: 1 1 200px;
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  background: #fff;
+}
+
+.ww-numero-grande {
+  display: block;
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--color-acento);
+}
+
+.ww-bloque-etiqueta {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.ww-mensaje-card {
+  border: 1px solid var(--color-borde);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+
+.ww-mensaje-card p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #374151;
+}
+
 /* Estado del proyecto de Creacion de Marketing (Paso 4) */
 .cm-estado-proyecto-borrador { background: #f3f4f6; color: #6b7280; }
 .cm-estado-proyecto-confirmado { background: #dcfce7; color: #166534; }

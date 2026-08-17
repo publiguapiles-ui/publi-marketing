@@ -139,6 +139,7 @@ def create_app(nombre_config=None):
 def registrar_blueprints(app):
     from app.modules.auth.routes import auth_bp
     from app.modules.dashboard.routes import dashboard_bp
+    from app.modules.api_whatsapp.routes import api_whatsapp_bp
     from app.modules.clientes.routes import clientes_bp
     from app.modules.empresas.routes import empresas_bp
     from app.modules.contenido.routes import contenido_bp
@@ -155,6 +156,7 @@ def registrar_blueprints(app):
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(api_whatsapp_bp)
     app.register_blueprint(clientes_bp)
     app.register_blueprint(empresas_bp)
     app.register_blueprint(contenido_bp)

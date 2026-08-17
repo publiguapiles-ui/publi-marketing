@@ -67,6 +67,14 @@ from app.models.proyecto_marketing import (
     ACCIONES_SUGERIDAS,
     ESTADOS_PROYECTO_MARKETING,
 )
+from app.models.whatsapp import (
+    WhatsAppConnection,
+    WhatsAppContact,
+    WhatsAppConversation,
+    WhatsAppMessage,
+    ESTADOS_CONEXION_WHATSAPP,
+    DIRECCIONES_MENSAJE_WHATSAPP,
+)
 
 __all__ = [
     "Usuario",
@@ -139,4 +147,10 @@ __all__ = [
     "OBJETIVOS_SUGERIDOS",
     "ACCIONES_SUGERIDAS",
     "ESTADOS_PROYECTO_MARKETING",
+    "WhatsAppConnection",
+    "WhatsAppContact",
+    "WhatsAppConversation",
+    "WhatsAppMessage",
+    "ESTADOS_CONEXION_WHATSAPP",
+    "DIRECCIONES_MENSAJE_WHATSAPP",
 ]

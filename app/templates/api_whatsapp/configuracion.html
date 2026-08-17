@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block titulo %}Configuración de WhatsApp{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Configuración de WhatsApp</h1>
+    <p class="perfil-nota">Conecta tu cuenta de WhatsApp Business Platform (Cloud API de Meta). Nunca WhatsApp personal.</p>
+  </div>
+  <a href="{{ url_for('api_whatsapp.index') }}" class="boton-enlace">← API WhatsApp</a>
+</div>
+
+{% if error %}<div class="estado-vacio"><p>{{ error }}</p></div>{% endif %}
+
+<form method="post" class="formulario-simple">
+  <label>Phone Number ID <input type="text" name="phone_number_id" required value="{{ conexion.phone_number_id if conexion else '' }}" /></label>
+  <label>WhatsApp Business Account ID <input type="text" name="whatsapp_business_account_id" required value="{{ conexion.whatsapp_business_account_id if conexion else '' }}" /></label>
+  <label>
+    Access Token {% if conexion %}(ya configurado — deja vacío para no cambiarlo){% endif %}
+    <input type="password" name="access_token" placeholder="{{ '••••••••' if conexion else '' }}" autocomplete="off" />
+  </label>
+  <label>
+    Verify Token {% if conexion %}(ya configurado — deja vacío para no cambiarlo){% endif %}
+    <input type="password" name="verify_token" placeholder="{{ '••••••••' if conexion else '' }}" autocomplete="off" />
+  </label>
+  <button type="submit" class="boton-primario">Guardar</button>
+</form>
+
+<h2 class="ps-seccion-titulo">Webhook</h2>
+<p class="perfil-nota">Configura esta URL en Meta App Dashboard → WhatsApp → Configuración → Webhook, junto con el Verify Token de arriba:</p>
+<code>{{ url_webhook }}</code>
+{% endblock %}

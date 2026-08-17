@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titulo %}API WhatsApp{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>API WhatsApp</h1>
+    <p class="perfil-nota">Panel de conversaciones pendientes de WhatsApp Business Platform. Todavía no es un CRM — solo muestra lo que ya llegó.</p>
+  </div>
+  <a href="{{ url_for('api_whatsapp.configuracion_formulario') }}" class="boton-enlace">Configuración</a>
+</div>
+
+{% if panel.conectada %}
+<p class="perfil-nota">
+  <span class="estado-badge ww-estado-conectada">CONECTADA</span>
+  — Última sincronización: <span id="ww-ultima-sync">{{ panel.ultima_sincronizacion_texto or "Todavía ninguna" }}</span>
+</p>
+
+<div class="ww-bloques">
+  <div class="ww-bloque-numero">
+    <span class="ww-numero-grande" id="ww-sin-responder">{{ panel.sin_responder }}</span>
+    <span class="ww-bloque-etiqueta">Conversaciones sin responder</span>
+  </div>
+  <div class="ww-bloque-numero">
+    <span class="ww-numero-grande" id="ww-sin-abrir">{{ panel.sin_abrir }}</span>
+    <span class="ww-bloque-etiqueta">Conversaciones sin abrir</span>
+  </div>
+</div>
+
+<h2 class="ps-seccion-titulo">Últimos 3 mensajes recibidos</h2>
+<div id="ww-ultimos-mensajes"></div>
+{% else %}
+<div class="estado-vacio">
+  <p>WhatsApp todavía no está conectado.</p>
+  <a href="{{ url_for('api_whatsapp.configuracion_formulario') }}" class="boton-primario">Conectar WhatsApp</a>
+</div>
+{% endif %}
+
+<script>
+  window.WW_PANEL_URL = "{{ url_for('api_whatsapp.panel_json') }}";
+  window.WW_MARCAR_VISTA_URL_BASE = "{{ url_for('api_whatsapp.marcar_vista', conversacion_id=0) }}".replace("/0/marcar-vista", "/__ID__/marcar-vista");
+  window.WW_PANEL_INICIAL = {{ panel | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/api_whatsapp.js') }}"></script>
+{% endblock %}
