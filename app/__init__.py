@@ -140,6 +140,14 @@ def create_app(nombre_config=None):
     def index():
         return redirect(url_for("dashboard.index"))
 
+    @app.get("/privacidad")
+    def privacidad():
+        from datetime import date
+
+        from flask import render_template
+
+        return render_template("legal/privacidad.html", fecha_actualizacion=date.today().strftime("%d/%m/%Y"))
+
     return app
 
 
