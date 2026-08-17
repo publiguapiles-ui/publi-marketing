@@ -410,6 +410,17 @@ body {
   background: #fff;
 }
 
+.ww-mensaje-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ww-estado-mensaje-no_leido { background: #dbeafe; color: #1e40af; }
+.ww-estado-mensaje-leido { background: #f3f4f6; color: #6b7280; }
+.ww-estado-mensaje-enviado { background: #dcfce7; color: #166534; }
+
 .ww-mensaje-card p {
   margin: 4px 0 0;
   font-size: 14px;

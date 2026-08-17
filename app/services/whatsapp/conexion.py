@@ -3,9 +3,21 @@ NUNCA WhatsApp personal. Los tokens se cifran con la MISMA clave y
 funciones que ya usa Datos de Meta (app/core/crypto.py, pensado
 explicitamente para reutilizarse con integraciones futuras) -- nunca
 se guarda un token en texto plano ni se expone a rutas/templates.
+
+No se agregan variables de entorno globales (WHATSAPP_ACCESS_TOKEN,
+etc.) a proposito: cada empresa tiene su propia cuenta de WhatsApp
+Business, y una variable de entorno de Railway es global a todo el
+despliegue -- usarla rompería el aislamiento multiempresa (punto 7 del
+enunciado). Los tokens siguen viviendo cifrados por empresa en
+WhatsAppConnection, igual que MetaConexion; la unica variable de
+entorno que esta integracion reutiliza es META_TOKEN_ENCRYPTION_KEY
+(la clave de cifrado, no un secreto de WhatsApp en si), que ya esta
+configurada en Railway desde Datos de Meta.
 """
 
-from app.core.crypto import cifrar
+import secrets
+
+from app.core.crypto import cifrar, descifrar
 
 ESTADOS_CONEXION_WHATSAPP = ["conectada", "desconectada"]
 
@@ -82,3 +94,58 @@ def desconectar(empresa_id):
     conexion.estado = "desconectada"
     db.session.commit()
     return True
+
+
+def verify_token_actual(empresa_id):
+    """El Verify Token EN CLARO de la empresa, o None. A diferencia del
+    Access Token, el enunciado permite mostrar este valor (no es un
+    secreto de acceso a la cuenta, solo la palabra que Meta repite en
+    el handshake del webhook) -- se descifra unicamente aqui, nunca se
+    guarda descifrado."""
+    conexion = obtener_conexion(empresa_id)
+    if conexion is None:
+        return None
+    return descifrar(conexion.verify_token_cifrado)
+
+
+def regenerar_verify_token(empresa_id):
+    """(verify_token_nuevo_o_None). Genera un Verify Token nuevo al
+    azar y lo guarda cifrado -- el llamador debe mostrarselo UNA vez al
+    usuario para que lo actualice tambien en Meta App Dashboard (el
+    webhook GET dejara de validar con el token viejo de inmediato)."""
+    from app.extensions import db
+
+    conexion = obtener_conexion(empresa_id)
+    if conexion is None:
+        return None
+    nuevo_token = secrets.token_urlsafe(24)
+    conexion.verify_token_cifrado = cifrar(nuevo_token)
+    db.session.commit()
+    return nuevo_token
+
+
+def probar_conexion_whatsapp(empresa_id):
+    """(ok_bool, mensaje, detalle_o_None). Llama a la Graph API real de
+    Meta (GET /{phone_number_id}) para confirmar que el token es
+    valido, el Phone Number ID existe y la cuenta tiene acceso -- ver
+    https://developers.facebook.com/docs/whatsapp/cloud-api/reference/phone-numbers.
+    NUNCA expone el Access Token en el mensaje de error; `detalle`
+    trae el codigo/tipo que Meta reporto, para diagnosticar sin
+    filtrar credenciales."""
+    from app.services.meta.client import MetaAPIError, MetaClient
+
+    conexion = obtener_conexion(empresa_id)
+    if conexion is None:
+        return False, "Todavía no hay ninguna conexión configurada.", None
+
+    access_token = descifrar(conexion.access_token_cifrado)
+    if access_token is None:
+        return False, "El token guardado no se pudo leer -- vuelve a conectar WhatsApp.", None
+
+    cliente = MetaClient(access_token=access_token)
+    try:
+        cliente.get(conexion.phone_number_id, params={"fields": "verified_name,display_phone_number,quality_rating"})
+    except MetaAPIError as exc:
+        return False, str(exc), {"codigo": exc.codigo, "tipo": exc.tipo, "endpoint": conexion.phone_number_id}
+
+    return True, "Conexión correcta.", None

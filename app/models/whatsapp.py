@@ -5,6 +5,15 @@ from app.extensions import db
 ESTADOS_CONEXION_WHATSAPP = ["conectada", "desconectada"]
 DIRECCIONES_MENSAJE_WHATSAPP = ["entrante", "saliente"]
 
+# Estados de referencia (Paso 1 de API WhatsApp, punto 8) -- NINGUNO de
+# estos es una columna de base de datos: Meta no entrega "conversacion
+# abierta/cerrada" ni "mensaje leido/no leido" para mensajes entrantes,
+# asi que se calculan en app/services/whatsapp/panel.py a partir de lo
+# que si tenemos (direccion + WhatsAppConversation.leida_en), nunca se
+# inventan ni se persisten como si vinieran de Meta.
+ESTADOS_CONVERSACION_WHATSAPP = ["pendiente_respuesta", "abierta", "respondida", "cerrada"]
+ESTADOS_MENSAJE_WHATSAPP = ["recibido", "enviado", "leido", "no_leido"]
+
 
 class WhatsAppConnection(db.Model):
     """Conexion de una empresa con WhatsApp Business Platform (Cloud

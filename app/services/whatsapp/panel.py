@@ -41,15 +41,44 @@ def _mensajes_recientes_por_conversacion(empresa_id):
     return {m.conversacion_id: m for m in filas}
 
 
+ETIQUETAS_DIRECCION_MENSAJE = {"entrante": "recibido", "saliente": "enviado"}
+
+
+def estado_conversacion(conversacion, ultimo_mensaje):
+    """Uno de ESTADOS_CONVERSACION_WHATSAPP -- ver el comentario en
+    app/models/whatsapp.py: se deriva SIEMPRE de direccion + leida_en,
+    nunca de un campo que Meta no entrega. "cerrada" nunca se alcanza
+    todavia (no existe una accion para cerrar una conversacion en este
+    paso) -- queda preparado para cuando exista."""
+    if ultimo_mensaje is None:
+        return "abierta"
+    if ultimo_mensaje.direccion == "saliente":
+        return "respondida"
+    if conversacion.leida_en is None or conversacion.leida_en < ultimo_mensaje.creado_en:
+        return "pendiente_respuesta"
+    return "abierta"
+
+
+def estado_mensaje(mensaje, conversacion):
+    """Uno de ESTADOS_MENSAJE_WHATSAPP. "leido"/"no_leido" se deriva de
+    si la conversacion se marco como vista despues de este mensaje --
+    Meta no reporta un estado de lectura para mensajes ENTRANTES (solo
+    para los que la empresa envia), asi que esto es honestamente un
+    estado interno de Publi Marketing, nunca uno que Meta haya dado."""
+    if mensaje.direccion == "saliente":
+        return "enviado"
+    if conversacion.leida_en is not None and conversacion.leida_en >= mensaje.creado_en:
+        return "leido"
+    return "no_leido"
+
+
 def _serializar_mensaje(mensaje):
     from app.extensions import db
     from app.models import WhatsAppContact, WhatsAppConversation
 
+    conversacion = db.session.query(WhatsAppConversation).filter_by(id=mensaje.conversacion_id).first()
     contacto = (
-        db.session.query(WhatsAppContact)
-        .join(WhatsAppConversation, WhatsAppContact.id == WhatsAppConversation.contacto_id)
-        .filter(WhatsAppConversation.id == mensaje.conversacion_id)
-        .first()
+        db.session.query(WhatsAppContact).filter_by(id=conversacion.contacto_id).first() if conversacion else None
     )
     return {
         "conversacion_id": mensaje.conversacion_id,
@@ -57,6 +86,7 @@ def _serializar_mensaje(mensaje):
         "contacto_telefono": contacto.telefono if contacto else None,
         "contenido": mensaje.contenido,
         "creado_en": mensaje.creado_en.isoformat(),
+        "estado": estado_mensaje(mensaje, conversacion) if conversacion else None,
     }
 
 

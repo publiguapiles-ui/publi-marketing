@@ -11,21 +11,40 @@
 
 {% if error %}<div class="estado-vacio"><p>{{ error }}</p></div>{% endif %}
 
-<form method="post" class="formulario-simple">
-  <label>Phone Number ID <input type="text" name="phone_number_id" required value="{{ conexion.phone_number_id if conexion else '' }}" /></label>
+<h2 class="ps-seccion-titulo">Conectar WhatsApp Business</h2>
+<form method="post" class="formulario-simple" id="form-conexion-whatsapp">
   <label>WhatsApp Business Account ID <input type="text" name="whatsapp_business_account_id" required value="{{ conexion.whatsapp_business_account_id if conexion else '' }}" /></label>
+  <label>Phone Number ID <input type="text" name="phone_number_id" required value="{{ conexion.phone_number_id if conexion else '' }}" /></label>
   <label>
     Access Token {% if conexion %}(ya configurado — deja vacío para no cambiarlo){% endif %}
     <input type="password" name="access_token" placeholder="{{ '••••••••' if conexion else '' }}" autocomplete="off" />
   </label>
   <label>
-    Verify Token {% if conexion %}(ya configurado — deja vacío para no cambiarlo){% endif %}
+    Verify Token {% if conexion %}(deja vacío para no cambiarlo — o usa "Regenerar" abajo){% endif %}
     <input type="password" name="verify_token" placeholder="{{ '••••••••' if conexion else '' }}" autocomplete="off" />
   </label>
-  <button type="submit" class="boton-primario">Guardar</button>
+  <div>
+    <button type="submit" class="boton-primario">Guardar conexión</button>
+    {% if conexion %}<button type="button" id="ww-boton-probar" class="boton-enlace">Probar conexión</button>{% endif %}
+  </div>
+  <p id="ww-resultado-prueba" class="perfil-nota" hidden></p>
 </form>
 
-<h2 class="ps-seccion-titulo">Webhook</h2>
-<p class="perfil-nota">Configura esta URL en Meta App Dashboard → WhatsApp → Configuración → Webhook, junto con el Verify Token de arriba:</p>
-<code>{{ url_webhook }}</code>
+<h2 class="ps-seccion-titulo">Configuración del Webhook</h2>
+<p class="perfil-nota">Configura esto en Meta App Dashboard → WhatsApp → Configuración → Webhook:</p>
+<dl class="perfil-datos">
+  <dt>URL del webhook</dt><dd><code>{{ url_webhook }}</code></dd>
+  <dt>Verify Token</dt>
+  <dd>
+    {% if verify_token_actual %}<code>{{ verify_token_actual }}</code>{% else %}Se genera al guardar la conexión.{% endif %}
+    {% if conexion %}<button type="button" id="ww-boton-regenerar" class="boton-enlace">Regenerar</button>{% endif %}
+  </dd>
+</dl>
+<p class="perfil-nota">El Access Token nunca se muestra — si lo perdiste, genera uno nuevo en Meta Business Suite y vuelve a pegarlo arriba. El Verify Token sí puede mostrarse: no da acceso a tu cuenta, solo lo usa Meta para confirmar el webhook.</p>
+
+<script>
+  window.WW_PROBAR_CONEXION_URL = "{{ url_for('api_whatsapp.probar_conexion') }}";
+  window.WW_REGENERAR_TOKEN_URL = "{{ url_for('api_whatsapp.regenerar_token') }}";
+</script>
+<script src="{{ url_for('static', filename='js/api_whatsapp_configuracion.js') }}"></script>
 {% endblock %}

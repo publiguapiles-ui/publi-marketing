@@ -21,6 +21,8 @@
     }
   }
 
+  const ETIQUETAS_ESTADO_MENSAJE = { leido: "Leído", no_leido: "No leído", enviado: "Enviado", recibido: "Recibido" };
+
   function renderUltimosMensajes(mensajes) {
     const cont = document.getElementById("ww-ultimos-mensajes");
     if (!cont) return;
@@ -31,7 +33,10 @@
     }
     mensajes.forEach((m) => {
       const card = crear("div", "ww-mensaje-card");
-      card.appendChild(crear("strong", null, m.contacto_nombre || m.contacto_telefono || "Desconocido"));
+      const cabecera = crear("div", "ww-mensaje-cabecera");
+      cabecera.appendChild(crear("strong", null, m.contacto_nombre || m.contacto_telefono || "Desconocido"));
+      if (m.estado) cabecera.appendChild(crear("span", `estado-badge ww-estado-mensaje-${m.estado}`, ETIQUETAS_ESTADO_MENSAJE[m.estado] || m.estado));
+      card.appendChild(cabecera);
       card.appendChild(crear("p", null, m.contenido));
       card.appendChild(crear("p", "perfil-nota", formatearFecha(m.creado_en)));
       const boton = crear("button", "boton-enlace", "Marcar como vista");

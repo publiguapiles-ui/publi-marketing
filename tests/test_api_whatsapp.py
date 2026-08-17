@@ -471,15 +471,16 @@ def test_verify_token_nunca_se_guarda_en_texto_plano(client, usuario_a_con_empre
         assert "verify-secreto-nunca-en-claro" not in conexion.verify_token_cifrado
 
 
-def test_pagina_configuracion_nunca_muestra_el_token(client, usuario_a_con_empresa):
+def test_pagina_configuracion_nunca_muestra_el_access_token(client, usuario_a_con_empresa):
+    """El Access Token JAMAS se muestra. El Verify Token si puede
+    mostrarse (punto 10 del enunciado: no es un secreto de acceso a la
+    cuenta) -- ver test_pagina_configuracion_muestra_el_verify_token."""
     with client.application.app_context():
-        _conectar(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], access_token="token-secreto-en-html", verify_token="verify-secreto-en-html")
+        _conectar(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], access_token="token-secreto-en-html")
 
     resp = client.get("/api-whatsapp/configuracion")
     assert resp.status_code == 200
-    texto = resp.get_data(as_text=True)
-    assert "token-secreto-en-html" not in texto
-    assert "verify-secreto-en-html" not in texto
+    assert "token-secreto-en-html" not in resp.get_data(as_text=True)
 
 
 def test_panel_json_nunca_incluye_tokens(client, usuario_a_con_empresa):
@@ -512,3 +513,220 @@ def test_ruta_index_sin_conectar_muestra_boton_conectar(client, usuario_a_con_em
     texto = resp.get_data(as_text=True)
     assert "todavía no está conectado" in texto.lower()
     assert "Conectar WhatsApp" in texto
+
+
+# --- Probar conexion (llamada real a la Graph API, mockeada) ---------------------------
+
+def _mockear_meta_client(monkeypatch, respuesta_o_error):
+    import app.services.meta.client as client_mod
+
+    def _get(self, ruta, params=None, access_token=None):
+        if isinstance(respuesta_o_error, Exception):
+            raise respuesta_o_error
+        return respuesta_o_error
+
+    monkeypatch.setattr(client_mod.MetaClient, "get", _get)
+
+
+def test_probar_conexion_exitosa(client, usuario_a_con_empresa, monkeypatch):
+    from app.services.whatsapp.conexion import probar_conexion_whatsapp
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        _conectar(empresa_id, usuario_a_con_empresa["usuario_id"])
+        _mockear_meta_client(monkeypatch, {"verified_name": "Panadería Bendetto", "display_phone_number": "+506 8888 7777"})
+
+        ok, mensaje, detalle = probar_conexion_whatsapp(empresa_id)
+        assert ok is True
+        assert mensaje == "Conexión correcta."
+
+
+def test_probar_conexion_token_invalido(client, usuario_a_con_empresa, monkeypatch):
+    from app.services.meta.client import MetaAPIError
+    from app.services.whatsapp.conexion import probar_conexion_whatsapp
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        _conectar(empresa_id, usuario_a_con_empresa["usuario_id"])
+        _mockear_meta_client(monkeypatch, MetaAPIError("Invalid OAuth access token", codigo=190))
+
+        ok, mensaje, detalle = probar_conexion_whatsapp(empresa_id)
+        assert ok is False
+        assert "Invalid OAuth access token" in mensaje
+        assert detalle["codigo"] == 190
+        assert "token-secreto-123" not in mensaje  # nunca expone el token real
+
+
+def test_probar_conexion_sin_configurar(client, usuario_a_con_empresa):
+    from app.services.whatsapp.conexion import probar_conexion_whatsapp
+
+    with client.application.app_context():
+        ok, mensaje, detalle = probar_conexion_whatsapp(usuario_a_con_empresa["empresa_id"])
+        assert ok is False
+
+
+def test_ruta_probar_conexion_end_to_end(client, usuario_a_con_empresa, monkeypatch):
+    with client.application.app_context():
+        _conectar(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"])
+    _mockear_meta_client(monkeypatch, {"verified_name": "Bendetto"})
+
+    resp = client.post("/api-whatsapp/probar-conexion")
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+
+
+# --- Verify Token: mostrar (no es secreto de acceso) y regenerar -----------------------
+
+def test_verify_token_actual_devuelve_el_valor_en_claro(client, usuario_a_con_empresa):
+    from app.services.whatsapp.conexion import verify_token_actual
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        _conectar(empresa_id, usuario_a_con_empresa["usuario_id"], verify_token="mi-verify-token-visible")
+        assert verify_token_actual(empresa_id) == "mi-verify-token-visible"
+
+
+def test_pagina_configuracion_muestra_el_verify_token(client, usuario_a_con_empresa):
+    """A diferencia del Access Token, el Verify Token SI puede
+    mostrarse (no da acceso a la cuenta)."""
+    with client.application.app_context():
+        _conectar(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], verify_token="verify-visible-en-pantalla")
+
+    resp = client.get("/api-whatsapp/configuracion")
+    assert "verify-visible-en-pantalla" in resp.get_data(as_text=True)
+
+
+def test_regenerar_verify_token_cambia_el_valor(client, usuario_a_con_empresa):
+    from app.services.whatsapp.conexion import regenerar_verify_token, verify_token_actual
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        _conectar(empresa_id, usuario_a_con_empresa["usuario_id"], verify_token="token-original")
+
+        nuevo = regenerar_verify_token(empresa_id)
+        assert nuevo != "token-original"
+        assert verify_token_actual(empresa_id) == nuevo
+
+
+def test_regenerar_verify_token_invalida_el_anterior_en_el_webhook(client, usuario_a_con_empresa):
+    from app.services.whatsapp.conexion import regenerar_verify_token
+    from app.services.whatsapp.webhook import verificar_challenge
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        _conectar(empresa_id, usuario_a_con_empresa["usuario_id"], verify_token="token-viejo")
+        regenerar_verify_token(empresa_id)
+
+        assert verificar_challenge("subscribe", "token-viejo", "c") is None
+
+
+def test_regenerar_verify_token_sin_conexion_es_none(client, usuario_a_con_empresa):
+    from app.services.whatsapp.conexion import regenerar_verify_token
+
+    with client.application.app_context():
+        assert regenerar_verify_token(usuario_a_con_empresa["empresa_id"]) is None
+
+
+def test_ruta_regenerar_token_end_to_end(client, usuario_a_con_empresa):
+    with client.application.app_context():
+        _conectar(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], verify_token="original")
+
+    resp = client.post("/api-whatsapp/regenerar-verify-token")
+    assert resp.status_code == 200
+    datos = resp.get_json()
+    assert datos["ok"] is True
+    assert datos["verify_token"] != "original"
+
+
+# --- Estados (punto 8): derivados, nunca inventados a partir de lo que Meta NO entrega ---
+
+def test_estado_conversacion_pendiente_respuesta(client, usuario_a_con_empresa):
+    from app.extensions import db
+    from app.models import WhatsAppConversation
+    from app.services.whatsapp.panel import _mensajes_recientes_por_conversacion, estado_conversacion
+    from app.services.whatsapp.webhook import procesar_evento
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        _conectar(empresa_id, usuario_a_con_empresa["usuario_id"], phone_number_id="pn-1")
+        procesar_evento(_payload_mensaje_entrante("pn-1", "50688887777", "Hola", "wamid.1"))
+
+        conversacion = db.session.query(WhatsAppConversation).filter_by(empresa_id=empresa_id).first()
+        ultimo = _mensajes_recientes_por_conversacion(empresa_id)[conversacion.id]
+        assert estado_conversacion(conversacion, ultimo) == "pendiente_respuesta"
+
+
+def test_estado_conversacion_abierta_tras_marcar_vista(client, usuario_a_con_empresa):
+    from app.extensions import db
+    from app.models import WhatsAppConversation
+    from app.services.whatsapp.panel import _mensajes_recientes_por_conversacion, estado_conversacion, marcar_conversacion_vista
+    from app.services.whatsapp.webhook import procesar_evento
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        _conectar(empresa_id, usuario_a_con_empresa["usuario_id"], phone_number_id="pn-1")
+        procesar_evento(_payload_mensaje_entrante("pn-1", "50688887777", "Hola", "wamid.1"))
+
+        conversacion = db.session.query(WhatsAppConversation).filter_by(empresa_id=empresa_id).first()
+        marcar_conversacion_vista(empresa_id, conversacion.id)
+        db.session.refresh(conversacion)
+
+        ultimo = _mensajes_recientes_por_conversacion(empresa_id)[conversacion.id]
+        assert estado_conversacion(conversacion, ultimo) == "abierta"
+
+
+def test_estado_mensaje_no_leido_luego_leido(client, usuario_a_con_empresa):
+    from app.extensions import db
+    from app.models import WhatsAppConversation, WhatsAppMessage
+    from app.services.whatsapp.panel import estado_mensaje, marcar_conversacion_vista
+    from app.services.whatsapp.webhook import procesar_evento
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        _conectar(empresa_id, usuario_a_con_empresa["usuario_id"], phone_number_id="pn-1")
+        procesar_evento(_payload_mensaje_entrante("pn-1", "50688887777", "Hola", "wamid.1"))
+
+        conversacion = db.session.query(WhatsAppConversation).filter_by(empresa_id=empresa_id).first()
+        mensaje = db.session.query(WhatsAppMessage).filter_by(conversacion_id=conversacion.id).first()
+        assert estado_mensaje(mensaje, conversacion) == "no_leido"
+
+        marcar_conversacion_vista(empresa_id, conversacion.id)
+        db.session.refresh(conversacion)
+        assert estado_mensaje(mensaje, conversacion) == "leido"
+
+
+def test_panel_incluye_estado_en_ultimos_mensajes(client, usuario_a_con_empresa):
+    from app.services.whatsapp.panel import construir_panel
+    from app.services.whatsapp.webhook import procesar_evento
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        _conectar(empresa_id, usuario_a_con_empresa["usuario_id"], phone_number_id="pn-1")
+        procesar_evento(_payload_mensaje_entrante("pn-1", "50688887777", "Hola", "wamid.1"))
+
+        panel = construir_panel(empresa_id)
+        assert panel["ultimos_mensajes"][0]["estado"] == "no_leido"
+
+
+# --- Seguridad: no acceder a otra empresa cambiando el ID en la URL --------------------
+
+def test_ruta_probar_conexion_aislada_por_empresa(client, usuario_a_con_empresa, usuario_b_con_empresa, monkeypatch):
+    """La ruta usa la empresa activa de la sesion, nunca un ID de la
+    URL/body -- no hay forma de "probar" la conexion de otra empresa."""
+    with client.application.app_context():
+        _conectar(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"])
+    _mockear_meta_client(monkeypatch, {"verified_name": "A"})
+
+    iniciar_sesion_de_prueba(client, usuario_b_con_empresa["usuario_id"], "b@example.com")
+    resp = client.post("/api-whatsapp/probar-conexion")
+    # empresa B no tiene conexion configurada -- nunca prueba la de A
+    assert resp.get_json()["ok"] is False
+
+
+def test_ruta_regenerar_token_aislada_por_empresa(client, usuario_a_con_empresa, usuario_b_con_empresa):
+    with client.application.app_context():
+        _conectar(usuario_a_con_empresa["empresa_id"], usuario_a_con_empresa["usuario_id"], verify_token="token-de-a")
+
+    iniciar_sesion_de_prueba(client, usuario_b_con_empresa["usuario_id"], "b@example.com")
+    resp = client.post("/api-whatsapp/regenerar-verify-token")
+    assert resp.status_code == 404  # empresa B no tiene conexion -- nunca regenera la de A

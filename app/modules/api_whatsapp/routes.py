@@ -12,7 +12,13 @@ from flask import Blueprint, abort, jsonify, redirect, render_template, request,
 from app.core.auth import obtener_usuario_actual
 from app.core.decorators import login_required
 from app.core.empresas import obtener_empresa_activa
-from app.services.whatsapp.conexion import guardar_conexion, obtener_conexion
+from app.services.whatsapp.conexion import (
+    guardar_conexion,
+    obtener_conexion,
+    probar_conexion_whatsapp,
+    regenerar_verify_token,
+    verify_token_actual,
+)
 from app.services.whatsapp.panel import construir_panel, marcar_conversacion_vista
 from app.services.whatsapp.webhook import procesar_evento, verificar_challenge
 
@@ -48,6 +54,7 @@ def configuracion_formulario():
         "api_whatsapp/configuracion.html",
         empresa_activa=empresa,
         conexion=obtener_conexion(empresa.id),
+        verify_token_actual=verify_token_actual(empresa.id),
         url_webhook=url_for("api_whatsapp.webhook_recibir", _external=True),
     )
 
@@ -71,10 +78,29 @@ def configuracion_guardar():
             "api_whatsapp/configuracion.html",
             empresa_activa=empresa,
             conexion=obtener_conexion(empresa.id),
+            verify_token_actual=verify_token_actual(empresa.id),
             url_webhook=url_for("api_whatsapp.webhook_recibir", _external=True),
             error=error,
         ), 400
     return redirect(url_for("api_whatsapp.index"))
+
+
+@api_whatsapp_bp.post("/probar-conexion")
+@login_required
+def probar_conexion():
+    empresa, _rol = _empresa_activa_o_404()
+    ok, mensaje, detalle = probar_conexion_whatsapp(empresa.id)
+    return jsonify({"ok": ok, "mensaje": mensaje, "detalle": detalle})
+
+
+@api_whatsapp_bp.post("/regenerar-verify-token")
+@login_required
+def regenerar_token():
+    empresa, _rol = _empresa_activa_o_404()
+    nuevo_token = regenerar_verify_token(empresa.id)
+    if nuevo_token is None:
+        return jsonify({"ok": False, "error": "Todavía no hay ninguna conexión configurada."}), 404
+    return jsonify({"ok": True, "verify_token": nuevo_token})
 
 
 @api_whatsapp_bp.post("/conversaciones/<int:conversacion_id>/marcar-vista")
