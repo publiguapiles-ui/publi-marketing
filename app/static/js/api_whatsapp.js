@@ -1,10 +1,10 @@
 (function () {
   // API WhatsApp: panel de SOLO LECTURA (3 bloques: sin responder, sin
   // abrir, ultimos 3 mensajes). Actualizacion por polling simple
-  // (fetch cada 20s) -- sin WebSocket, sin Redis/Celery, compatible
+  // (fetch cada 2s) -- sin WebSocket, sin Redis/Celery, compatible
   // con la arquitectura actual (punto 10 del enunciado).
 
-  const INTERVALO_POLLING_MS = 20000;
+  const INTERVALO_POLLING_MS = 2000;
 
   function crear(etiqueta, clases, texto) {
     const el = document.createElement(etiqueta);
