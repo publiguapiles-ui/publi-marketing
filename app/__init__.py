@@ -147,6 +147,7 @@ def registrar_blueprints(app):
     from app.modules.estratega_ia.routes import estratega_ia_bp
     from app.modules.calendario.routes import calendario_bp
     from app.modules.redes_sociales.routes import redes_sociales_bp
+    from app.modules.creacion_marketing.routes import creacion_marketing_bp
     from app.modules.datos_meta.routes import datos_meta_bp
     from app.modules.biblioteca.routes import biblioteca_bp
     from app.modules.configuracion.routes import configuracion_bp
@@ -162,6 +163,11 @@ def registrar_blueprints(app):
     app.register_blueprint(estratega_ia_bp)
     app.register_blueprint(calendario_bp)
     app.register_blueprint(redes_sociales_bp)
+    # Paso 4: Creacion de Marketing es independiente de Datos de Meta --
+    # todo lo que ocurre ANTES de pautar (objetivo, brief, y en pasos
+    # futuros estrategia/conceptos/creativos/produccion/calendario),
+    # nunca conecta con campañas de Meta ni publica nada.
+    app.register_blueprint(creacion_marketing_bp)
     # Campañas, Analítica e Informes (antes stubs "Próximamente"
     # independientes) se reorganizaron dentro de Datos de Meta: una
     # sola integración con Meta, reutilizada por todas las secciones

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titulo %}Creación de Marketing{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>Creación de Marketing</h1>
+    <p class="perfil-nota">Todo lo que ocurre ANTES de pautar: objetivo, brief, estrategia de contenido y producción. Independiente de Datos de Meta — aquí no se conecta ni se publica nada todavía.</p>
+  </div>
+</div>
+
+<h2 class="ps-seccion-titulo">Proyectos</h2>
+{% if proyectos %}
+<div class="dm-tabla-scroll">
+<table class="dm-tabla-kpi">
+  <thead>
+    <tr><th>Proyecto</th><th>Objetivo</th><th>Estado</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for p in proyectos %}
+    <tr>
+      <td>{{ p.nombre }}</td>
+      <td>{{ etiquetas_objetivos.get(p.objetivo_tipo, p.objetivo_tipo) if p.objetivo_tipo else "Por definir" }}</td>
+      <td><span class="estado-badge cm-estado-proyecto-{{ p.estado }}">{{ p.estado }}</span></td>
+      <td><a href="{{ url_for('creacion_marketing.detalle', proyecto_id=p.id) }}" class="boton-enlace">Abrir →</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="estado-vacio"><p>Todavía no hay ningún proyecto de marketing. Crea el primero abajo.</p></div>
+{% endif %}
+
+<h2 class="ps-seccion-titulo">Nuevo proyecto de marketing</h2>
+<form id="form-nuevo-proyecto-marketing" class="formulario-simple">
+  <label>Cliente <input type="text" value="{{ empresa_activa.nombre }}" disabled /></label>
+  <label>Nombre <input type="text" name="nombre" placeholder="Campaña Día de la Madre" required /></label>
+  <button type="submit" class="boton-primario">Crear proyecto (borrador)</button>
+  <p id="nuevo-proyecto-marketing-mensaje" class="perfil-nota" hidden></p>
+</form>
+
+<script>
+  window.CM_PROYECTOS_CREAR_URL = "{{ url_for('creacion_marketing.crear') }}";
+  window.CM_PROYECTOS_DETALLE_URL_BASE = "{{ url_for('creacion_marketing.detalle', proyecto_id=0) }}".replace("/0", "/__ID__");
+</script>
+<script src="{{ url_for('static', filename='js/creacion_marketing.js') }}"></script>
+{% endblock %}

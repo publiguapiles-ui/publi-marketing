@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block titulo %}{{ proyecto.nombre }} · Creación de Marketing{% endblock %}
+{% block contenido %}
+<div class="cabecera-seccion">
+  <div>
+    <h1>{{ proyecto.nombre }}</h1>
+    <p class="perfil-nota">
+      <span class="estado-badge cm-estado-proyecto-{{ proyecto.estado }}" id="cm-estado-badge">{{ proyecto.estado }}</span>
+      — {{ empresa_activa.nombre }}
+    </p>
+  </div>
+  <a href="{{ url_for('creacion_marketing.index') }}" class="boton-enlace">← Creación de Marketing</a>
+</div>
+<p class="perfil-nota">Responde las preguntas del brief, revisa el resumen automático y confirma cuando esté listo. Nunca se conecta con Meta ni se genera contenido todavía.</p>
+
+<form id="form-brief" class="formulario-simple">
+  <h2 class="ps-seccion-titulo">1. ¿Qué quiere lograr?</h2>
+  <label>
+    Objetivo
+    <select name="objetivo_tipo">
+      <option value="">Sin definir</option>
+      {% for clave in objetivos_sugeridos %}
+      <option value="{{ clave }}" {% if clave == proyecto.objetivo_tipo %}selected{% endif %}>{{ etiquetas_objetivos.get(clave, clave) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Cuéntanos más sobre el objetivo (obligatorio si elegiste "Otro") <textarea name="objetivo_detalle" rows="2">{{ proyecto.objetivo_detalle or "" }}</textarea></label>
+
+  <h2 class="ps-seccion-titulo">2. ¿A quién queremos llegar?</h2>
+  <label>Ubicación <input type="text" name="publico.ubicacion" value="{{ proyecto.publico.ubicacion or '' }}" placeholder="San José, zona metropolitana" /></label>
+  <label>Edad <input type="text" name="publico.edad" value="{{ proyecto.publico.edad or '' }}" placeholder="25-45 años" /></label>
+  <label>Género (si es relevante) <input type="text" name="publico.genero" value="{{ proyecto.publico.genero or '' }}" /></label>
+  <label>Tipo de cliente <input type="text" name="publico.tipo_cliente" value="{{ proyecto.publico.tipo_cliente or '' }}" placeholder="Familias, jóvenes profesionales" /></label>
+  <label>Intereses <input type="text" name="publico.intereses" value="{{ proyecto.publico.intereses or '' }}" /></label>
+  <label>Necesidades <input type="text" name="publico.necesidades" value="{{ proyecto.publico.necesidades or '' }}" /></label>
+  <label>Problema que tiene <input type="text" name="publico.problema" value="{{ proyecto.publico.problema or '' }}" /></label>
+  <label>Comportamiento <input type="text" name="publico.comportamiento" value="{{ proyecto.publico.comportamiento or '' }}" /></label>
+  <label>Relación actual con la marca <input type="text" name="publico.relacion_marca" value="{{ proyecto.publico.relacion_marca or '' }}" placeholder="Nuevo, cliente frecuente, no me conoce" /></label>
+
+  <h2 class="ps-seccion-titulo">3. ¿Qué vamos a promocionar?</h2>
+  <label>Producto <input type="text" name="oferta.producto" value="{{ proyecto.oferta.producto or '' }}" /></label>
+  <label>Servicio <input type="text" name="oferta.servicio" value="{{ proyecto.oferta.servicio or '' }}" /></label>
+  <label>Oferta <input type="text" name="oferta.oferta" value="{{ proyecto.oferta.oferta or '' }}" /></label>
+  <label>Precio <input type="text" name="oferta.precio" value="{{ proyecto.oferta.precio or '' }}" /></label>
+  <label>Promoción <input type="text" name="oferta.promocion" value="{{ proyecto.oferta.promocion or '' }}" /></label>
+  <label>Beneficio principal <input type="text" name="oferta.beneficio_principal" value="{{ proyecto.oferta.beneficio_principal or '' }}" /></label>
+  <label>Diferenciador <input type="text" name="oferta.diferenciador" value="{{ proyecto.oferta.diferenciador or '' }}" /></label>
+
+  <h2 class="ps-seccion-titulo">4. ¿Qué debe hacer la persona?</h2>
+  <label>
+    Acción deseada
+    <select name="accion_deseada">
+      <option value="">Sin definir</option>
+      {% for clave in acciones_sugeridas %}
+      <option value="{{ clave }}" {% if clave == proyecto.accion_deseada %}selected{% endif %}>{{ etiquetas_acciones.get(clave, clave) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Cuéntanos más sobre la acción (obligatorio si elegiste "Otro") <textarea name="accion_detalle" rows="2">{{ proyecto.accion_detalle or "" }}</textarea></label>
+
+  <h2 class="ps-seccion-titulo">5. Presupuesto</h2>
+  <p class="perfil-nota">La producción y la pauta se manejan por separado — no se asume que sean iguales. Deja el campo vacío si todavía no lo sabes ("Por definir").</p>
+  <label>Presupuesto de producción <input type="number" name="presupuesto_produccion" min="0" step="0.01" value="{{ proyecto.presupuesto_produccion if proyecto.presupuesto_produccion is not none else '' }}" /></label>
+  <label>Presupuesto de pauta <input type="number" name="presupuesto_pauta" min="0" step="0.01" value="{{ proyecto.presupuesto_pauta if proyecto.presupuesto_pauta is not none else '' }}" /></label>
+  <label>Moneda <input type="text" name="moneda" value="{{ proyecto.moneda }}" maxlength="10" /></label>
+
+  <h2 class="ps-seccion-titulo">6. Plazo</h2>
+  <label>Fecha de inicio <input type="date" name="fecha_inicio" value="{{ proyecto.fecha_inicio or '' }}" /></label>
+  <label>Fecha final <input type="date" name="fecha_fin" value="{{ proyecto.fecha_fin or '' }}" /></label>
+  <label class="cm-checkbox"><input type="checkbox" name="sin_fecha_definida" {% if proyecto.sin_fecha_definida %}checked{% endif %} /> Sin fecha definida todavía</label>
+
+  <h2 class="ps-seccion-titulo">7. Identidad de marca</h2>
+  {% if marca_existente.nombre_comercial or marca_existente.color_principal or marca_existente.tiene_logo %}
+  <p class="perfil-nota">Ya tenemos esto guardado en Publi Marketing, no hace falta repetirlo: {% if marca_existente.nombre_comercial %}nombre comercial <strong>{{ marca_existente.nombre_comercial }}</strong>{% endif %}{% if marca_existente.color_principal %}, color principal <strong>{{ marca_existente.color_principal }}</strong>{% endif %}{% if marca_existente.tiene_logo %}, logo ya cargado{% endif %}.</p>
+  {% else %}
+  <p class="perfil-nota">Todavía no hay identidad de marca guardada para esta empresa (nombre comercial, colores, logo) — puedes definirla en Configuración.</p>
+  {% endif %}
+  <label>Tono <input type="text" name="identidad_marca_brief.tono" value="{{ proyecto.identidad_marca_brief.tono or '' }}" placeholder="Cercano, profesional, divertido" /></label>
+  <label>Estilo <input type="text" name="identidad_marca_brief.estilo" value="{{ proyecto.identidad_marca_brief.estilo or '' }}" /></label>
+  <label>Personalidad <input type="text" name="identidad_marca_brief.personalidad" value="{{ proyecto.identidad_marca_brief.personalidad or '' }}" /></label>
+  <label>Restricciones <input type="text" name="identidad_marca_brief.restricciones" value="{{ proyecto.identidad_marca_brief.restricciones or '' }}" placeholder="Nunca usar cierto color, evitar cierto tema" /></label>
+
+  <h2 class="ps-seccion-titulo">8. Información adicional</h2>
+  <label>Cuéntanos cualquier cosa que consideres importante <textarea name="informacion_adicional" rows="3">{{ proyecto.informacion_adicional or "" }}</textarea></label>
+
+  <button type="submit" class="boton-primario">Guardar brief</button>
+  <p id="brief-mensaje" class="perfil-nota" hidden></p>
+</form>
+
+<h2 class="ps-seccion-titulo">Resumen automático</h2>
+{% if ia_configurada %}
+<button type="button" id="cm-boton-ayuda-ia" class="boton-enlace">Pedir ayuda a la IA para completar</button>
+<p id="cm-sugerencia-ia" class="perfil-nota" hidden></p>
+{% endif %}
+<div id="cm-campos-faltantes"></div>
+<dl class="perfil-datos" id="cm-resumen"></dl>
+
+<p class="perfil-nota">Esto es lo que entendimos. Puedes editar las respuestas arriba y guardar de nuevo antes de confirmar.</p>
+<button type="button" id="cm-boton-confirmar" class="boton-primario">Confirmar brief</button>
+<p id="cm-confirmar-mensaje" class="perfil-nota" hidden></p>
+
+<script>
+  window.CM_PROYECTO_ID = {{ proyecto.id }};
+  window.CM_PROYECTO_BRIEF_URL = "{{ url_for('creacion_marketing.brief_actualizar', proyecto_id=proyecto.id) }}";
+  window.CM_PROYECTO_RESUMEN_URL = "{{ url_for('creacion_marketing.resumen', proyecto_id=proyecto.id) }}";
+  window.CM_PROYECTO_CONFIRMAR_URL = "{{ url_for('creacion_marketing.confirmar', proyecto_id=proyecto.id) }}";
+  window.CM_PROYECTO_IA_AYUDA_URL = "{{ url_for('creacion_marketing.ia_ayuda', proyecto_id=proyecto.id) }}";
+</script>
+<script src="{{ url_for('static', filename='js/creacion_marketing.js') }}"></script>
+{% endblock %}

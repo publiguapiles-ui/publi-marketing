@@ -367,6 +367,13 @@ body {
 .estado-badge-critico { background: #fee2e2; color: #991b1b; }
 .estado-badge-sin_datos { background: #f3f4f6; color: #6b7280; }
 
+/* Estado del proyecto de Creacion de Marketing (Paso 4) */
+.cm-estado-proyecto-borrador { background: #f3f4f6; color: #6b7280; }
+.cm-estado-proyecto-confirmado { background: #dcfce7; color: #166534; }
+
+.cm-checkbox { display: flex; align-items: center; gap: 8px; flex-direction: row; }
+.cm-checkbox input { width: auto; }
+
 /* Estado del proyecto estrategico (Paso 9) */
 .dm-estado-proyecto-borrador { background: #f3f4f6; color: #6b7280; }
 .dm-estado-proyecto-planificado { background: #dbeafe; color: #1e40af; }

@@ -61,6 +61,12 @@ from app.models.fuente_datos import (
     ETIQUETAS_FUENTE_DATOS,
     ESTADOS_FUENTE_DATOS,
 )
+from app.models.proyecto_marketing import (
+    ProyectoMarketing,
+    OBJETIVOS_SUGERIDOS,
+    ACCIONES_SUGERIDAS,
+    ESTADOS_PROYECTO_MARKETING,
+)
 
 __all__ = [
     "Usuario",
@@ -129,4 +135,8 @@ __all__ = [
     "TIPOS_FUENTE_DATOS",
     "ETIQUETAS_FUENTE_DATOS",
     "ESTADOS_FUENTE_DATOS",
+    "ProyectoMarketing",
+    "OBJETIVOS_SUGERIDOS",
+    "ACCIONES_SUGERIDAS",
+    "ESTADOS_PROYECTO_MARKETING",
 ]
