@@ -730,3 +730,151 @@ def test_ruta_regenerar_token_aislada_por_empresa(client, usuario_a_con_empresa,
     iniciar_sesion_de_prueba(client, usuario_b_con_empresa["usuario_id"], "b@example.com")
     resp = client.post("/api-whatsapp/regenerar-verify-token")
     assert resp.status_code == 404  # empresa B no tiene conexion -- nunca regenera la de A
+
+
+# --- Registro insertado de WhatsApp (Embedded Signup / Coexistencia) -------------------
+
+def _mockear_meta_get_post(monkeypatch, respuesta_get, respuesta_post_o_error=None):
+    import app.services.meta.client as client_mod
+
+    def _get(self, ruta, params=None, access_token=None):
+        if isinstance(respuesta_get, Exception):
+            raise respuesta_get
+        return respuesta_get
+
+    def _post(self, ruta, data=None, access_token=None):
+        if isinstance(respuesta_post_o_error, Exception):
+            raise respuesta_post_o_error
+        return respuesta_post_o_error or {}
+
+    monkeypatch.setattr(client_mod.MetaClient, "get", _get)
+    monkeypatch.setattr(client_mod.MetaClient, "post", _post)
+
+
+def test_embedded_signup_completar_exitoso(client, usuario_a_con_empresa, monkeypatch):
+    from app.extensions import db
+    from app.models import WhatsAppConnection
+
+    _mockear_meta_get_post(monkeypatch, {"access_token": "token-embedded-signup-secreto"})
+
+    resp = client.post(
+        "/api-whatsapp/embedded-signup/completar",
+        json={"code": "codigo-fb-login", "phone_number_id": "pn-es-1", "waba_id": "waba-es-1"},
+    )
+    assert resp.status_code == 200
+    datos = resp.get_json()
+    assert datos["ok"] is True
+    assert "token-embedded-signup-secreto" not in resp.get_data(as_text=True)
+
+    with client.application.app_context():
+        empresa_id = usuario_a_con_empresa["empresa_id"]
+        conexion = db.session.query(WhatsAppConnection).filter_by(empresa_id=empresa_id).first()
+        assert conexion is not None
+        assert conexion.phone_number_id == "pn-es-1"
+        assert conexion.whatsapp_business_account_id == "waba-es-1"
+        assert conexion.estado == "conectada"
+
+
+def test_embedded_signup_completar_datos_incompletos(client, usuario_a_con_empresa):
+    resp = client.post("/api-whatsapp/embedded-signup/completar", json={"code": "c"})
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+
+def test_embedded_signup_completar_error_al_intercambiar_codigo(client, usuario_a_con_empresa, monkeypatch):
+    from app.extensions import db
+    from app.models import WhatsAppConnection
+    from app.services.meta.client import MetaAPIError
+
+    _mockear_meta_get_post(monkeypatch, MetaAPIError("This authorization code has expired.", codigo=100))
+
+    resp = client.post(
+        "/api-whatsapp/embedded-signup/completar",
+        json={"code": "codigo-vencido", "phone_number_id": "pn-es-2", "waba_id": "waba-es-2"},
+    )
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+    with client.application.app_context():
+        conexion = db.session.query(WhatsAppConnection).filter_by(empresa_id=usuario_a_con_empresa["empresa_id"]).first()
+        assert conexion is None  # nunca se guarda una conexion si el intercambio de codigo falla
+
+
+def test_embedded_signup_completar_fallo_suscripcion_no_deshace_la_conexion(client, usuario_a_con_empresa, monkeypatch):
+    """Si suscribir_app_a_waba falla, la conexion ya guardada
+    (guardar_conexion se ejecuta antes) se mantiene -- el usuario puede
+    seguir usando "Probar conexión" o reintentar mas tarde, en vez de
+    perder por completo lo que Meta ya concedio."""
+    from app.extensions import db
+    from app.models import WhatsAppConnection
+    from app.services.meta.client import MetaAPIError
+
+    _mockear_meta_get_post(
+        monkeypatch, {"access_token": "token-es-3"}, MetaAPIError("No se pudo suscribir la app al WABA", codigo=1)
+    )
+
+    resp = client.post(
+        "/api-whatsapp/embedded-signup/completar",
+        json={"code": "c", "phone_number_id": "pn-es-3", "waba_id": "waba-es-3"},
+    )
+    assert resp.status_code == 502
+    assert resp.get_json()["ok"] is False
+
+    with client.application.app_context():
+        conexion = db.session.query(WhatsAppConnection).filter_by(empresa_id=usuario_a_con_empresa["empresa_id"]).first()
+        assert conexion is not None
+        assert conexion.phone_number_id == "pn-es-3"
+
+
+def test_embedded_signup_completar_aislado_por_empresa(client, usuario_a_con_empresa, usuario_b_con_empresa, monkeypatch):
+    from app.extensions import db
+    from app.models import WhatsAppConnection
+
+    _mockear_meta_get_post(monkeypatch, {"access_token": "token-es-b"})
+
+    iniciar_sesion_de_prueba(client, usuario_b_con_empresa["usuario_id"], "b@example.com")
+    resp = client.post(
+        "/api-whatsapp/embedded-signup/completar",
+        json={"code": "c", "phone_number_id": "pn-es-b", "waba_id": "waba-es-b"},
+    )
+    assert resp.get_json()["ok"] is True
+
+    with client.application.app_context():
+        conexion_a = db.session.query(WhatsAppConnection).filter_by(empresa_id=usuario_a_con_empresa["empresa_id"]).first()
+        conexion_b = db.session.query(WhatsAppConnection).filter_by(empresa_id=usuario_b_con_empresa["empresa_id"]).first()
+        assert conexion_a is None
+        assert conexion_b is not None
+        assert conexion_b.phone_number_id == "pn-es-b"
+
+
+def test_sincronizar_datos_coexistencia_nunca_lanza(client, monkeypatch):
+    """Best-effort a proposito: un fallo en la sincronizacion de
+    contactos/historial de Coexistencia no debe tumbar la conexion --
+    los mensajes nuevos siguen llegando por el webhook normal."""
+    from app.services.meta.client import MetaAPIError
+    from app.services.whatsapp.embedded_signup import sincronizar_datos_coexistencia
+
+    _mockear_meta_get_post(monkeypatch, None, MetaAPIError("smb_app_data no disponible", codigo=1))
+
+    with client.application.app_context():
+        sincronizar_datos_coexistencia("pn-1", "token-1")  # no debe lanzar
+
+
+def test_pagina_configuracion_muestra_boton_embedded_signup_si_esta_configurado(client, usuario_a_con_empresa, monkeypatch):
+    monkeypatch.setenv("META_APP_ID", "app-id-prueba")
+    monkeypatch.setenv("META_WHATSAPP_CONFIG_ID", "config-id-prueba")
+
+    resp = client.get("/api-whatsapp/configuracion")
+    assert resp.status_code == 200
+    texto = resp.get_data(as_text=True)
+    assert "Conectar con WhatsApp (recomendado)" in texto
+    assert "config-id-prueba" in texto
+    assert "connect.facebook.net" in texto
+
+
+def test_pagina_configuracion_sin_config_id_no_muestra_boton_embedded_signup(client, usuario_a_con_empresa, monkeypatch):
+    monkeypatch.delenv("META_WHATSAPP_CONFIG_ID", raising=False)
+
+    resp = client.get("/api-whatsapp/configuracion")
+    assert resp.status_code == 200
+    assert "Conectar con WhatsApp (recomendado)" not in resp.get_data(as_text=True)

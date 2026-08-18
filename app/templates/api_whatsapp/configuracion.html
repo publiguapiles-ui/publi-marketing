@@ -11,7 +11,17 @@
 
 {% if error %}<div class="estado-vacio"><p>{{ error }}</p></div>{% endif %}
 
+{% if meta_app_id and meta_whatsapp_config_id %}
 <h2 class="ps-seccion-titulo">Conectar WhatsApp Business</h2>
+<p class="perfil-nota">Recomendado: si tu número ya usas la app normal de WhatsApp Business, este método te permite seguir usándola mientras conectas la API.</p>
+<button type="button" id="ww-boton-conectar-es" class="boton-primario" onclick="launchWhatsAppSignup()">Conectar con WhatsApp (recomendado)</button>
+<p id="ww-es-estado" class="perfil-nota" hidden></p>
+
+<h2 class="ps-seccion-titulo">O conectar manualmente</h2>
+<p class="perfil-nota">Para casos avanzados, o si prefieres pegar los datos directamente desde Meta Business Suite.</p>
+{% else %}
+<h2 class="ps-seccion-titulo">Conectar WhatsApp Business</h2>
+{% endif %}
 <form method="post" class="formulario-simple" id="form-conexion-whatsapp">
   <label>WhatsApp Business Account ID <input type="text" name="whatsapp_business_account_id" required value="{{ conexion.whatsapp_business_account_id if conexion else '' }}" /></label>
   <label>Phone Number ID <input type="text" name="phone_number_id" required value="{{ conexion.phone_number_id if conexion else '' }}" /></label>
@@ -47,4 +57,15 @@
   window.WW_REGENERAR_TOKEN_URL = "{{ url_for('api_whatsapp.regenerar_token') }}";
 </script>
 <script src="{{ url_for('static', filename='js/api_whatsapp_configuracion.js') }}"></script>
+
+{% if meta_app_id and meta_whatsapp_config_id %}
+<script>
+  window.WW_EMBEDDED_SIGNUP_URL = "{{ url_for('api_whatsapp.embedded_signup_completar') }}";
+  window.WW_META_APP_ID = "{{ meta_app_id }}";
+  window.WW_META_WHATSAPP_CONFIG_ID = "{{ meta_whatsapp_config_id }}";
+  window.WW_META_API_VERSION = "{{ meta_api_version }}";
+</script>
+<script src="{{ url_for('static', filename='js/api_whatsapp_embedded_signup.js') }}"></script>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/es_LA/sdk.js"></script>
+{% endif %}
 {% endblock %}

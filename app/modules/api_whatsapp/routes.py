@@ -7,17 +7,26 @@ Meta la llama directamente, sin sesion de usuario, por eso NO lleva
 @login_required. Todas las demas rutas requieren empresa activa.
 """
 
+import os
+import secrets
+
 from flask import Blueprint, abort, jsonify, redirect, render_template, request, url_for
 
 from app.core.auth import obtener_usuario_actual
 from app.core.decorators import login_required
 from app.core.empresas import obtener_empresa_activa
+from app.services.meta.client import MetaAPIError
 from app.services.whatsapp.conexion import (
     guardar_conexion,
     obtener_conexion,
     probar_conexion_whatsapp,
     regenerar_verify_token,
     verify_token_actual,
+)
+from app.services.whatsapp.embedded_signup import (
+    intercambiar_code_por_token,
+    sincronizar_datos_coexistencia,
+    suscribir_app_a_waba,
 )
 from app.services.whatsapp.panel import construir_panel, marcar_conversacion_vista
 from app.services.whatsapp.webhook import procesar_evento, verificar_challenge
@@ -56,6 +65,9 @@ def configuracion_formulario():
         conexion=obtener_conexion(empresa.id),
         verify_token_actual=verify_token_actual(empresa.id),
         url_webhook=url_for("api_whatsapp.webhook_recibir", _external=True),
+        meta_app_id=os.environ.get("META_APP_ID"),
+        meta_whatsapp_config_id=os.environ.get("META_WHATSAPP_CONFIG_ID"),
+        meta_api_version=os.environ.get("META_API_VERSION", "v21.0"),
     )
 
 
@@ -83,6 +95,52 @@ def configuracion_guardar():
             error=error,
         ), 400
     return redirect(url_for("api_whatsapp.index"))
+
+
+@api_whatsapp_bp.post("/embedded-signup/completar")
+@login_required
+def embedded_signup_completar():
+    """Recibe el resultado del registro insertado de WhatsApp (SDK de
+    JS, ver api_whatsapp_embedded_signup.js) una vez que FB.login() y
+    el listener de window.message ya capturaron `code`,
+    `phone_number_id` y `waba_id` en el navegador. Reutiliza
+    guardar_conexion() tal cual -- el registro insertado no cambia en
+    nada como se guarda una conexion, solo como se obtienen sus
+    datos."""
+    empresa, _rol = _empresa_activa_o_404()
+    usuario = obtener_usuario_actual()
+    datos = request.get_json(silent=True) or {}
+
+    code = (datos.get("code") or "").strip()
+    phone_number_id = (datos.get("phone_number_id") or "").strip()
+    waba_id = (datos.get("waba_id") or "").strip()
+    if not code or not phone_number_id or not waba_id:
+        return jsonify({"ok": False, "error": "Meta no devolvió los datos esperados. Intenta de nuevo."}), 400
+
+    try:
+        access_token = intercambiar_code_por_token(code)
+    except MetaAPIError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    verify_token = secrets.token_urlsafe(24)
+    conexion, error = guardar_conexion(
+        empresa.id, usuario["id"],
+        phone_number_id=phone_number_id,
+        whatsapp_business_account_id=waba_id,
+        access_token=access_token,
+        verify_token=verify_token,
+    )
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    try:
+        suscribir_app_a_waba(waba_id, access_token)
+    except MetaAPIError as exc:
+        return jsonify({"ok": False, "error": f"La conexión se guardó, pero falló la suscripción a webhooks: {exc}"}), 502
+
+    sincronizar_datos_coexistencia(phone_number_id, access_token)
+
+    return jsonify({"ok": True})
 
 
 @api_whatsapp_bp.post("/probar-conexion")
